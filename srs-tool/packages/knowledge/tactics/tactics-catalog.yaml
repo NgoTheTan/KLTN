@@ -1,0 +1,178 @@
+# Architecture Tactics Catalog
+# Maps quality attributes (ASR) to architecture tactics
+# Each tactic adds model elements/relationships when triggered
+version: "1.0.0"
+
+tactics:
+  # Performance
+  - id: perf-cache
+    when:
+      quality: performance
+      keywords: [response time, latency, thời gian phản hồi, tải trang]
+    add:
+      elements:
+        - kind: datastore
+          name: Cache
+          technology: Redis
+          description: In-memory cache for fast reads
+      relationships:
+        - source: api
+          target: cache
+          label: read/write cache
+          protocol: Redis protocol
+    stack_tags: [caching]
+    rationale: Caching reduces database load and improves response time for repeated queries.
+
+  - id: perf-cdn
+    when:
+      quality: performance
+      platform: web
+      keywords: [static assets, images, page load, tải trang]
+    add:
+      elements:
+        - kind: system
+          name: CDN
+          technology: Cloudflare / CloudFront
+          description: Content Delivery Network for static assets
+      relationships:
+        - source: browser
+          target: cdn
+          label: fetch static assets
+          protocol: HTTPS
+    stack_tags: [cdn]
+    rationale: CDN reduces latency for static assets by serving from edge nodes close to users.
+
+  # Reliability
+  - id: rel-queue
+    when:
+      quality: reliability
+      keywords: [async, background job, message queue, hàng đợi, bất đồng bộ]
+    add:
+      elements:
+        - kind: datastore
+          name: Message Queue
+          technology: Redis / BullMQ
+          description: Job queue for async background processing
+        - kind: container
+          name: Worker
+          technology: Node.js + BullMQ
+          description: Background job processor
+      relationships:
+        - source: api
+          target: queue
+          label: enqueue job
+        - source: queue
+          target: worker
+          label: dequeue and process
+    stack_tags: [queue, async]
+    rationale: Decoupling via message queue improves reliability and allows retries.
+
+  - id: rel-circuit-breaker
+    when:
+      quality: reliability
+      keywords: [external API, third party, timeout, retry]
+    add:
+      elements:
+        - kind: component
+          name: Circuit Breaker
+          technology: Custom / Resilience4j
+          description: Prevents cascade failures when external services are slow
+    stack_tags: [resilience]
+    rationale: Circuit breaker pattern prevents cascade failures and enables graceful degradation.
+
+  # Security
+  - id: sec-gateway
+    when:
+      quality: security
+      keywords: [API gateway, rate limit, WAF, DDoS]
+    add:
+      elements:
+        - kind: system
+          name: API Gateway / WAF
+          technology: Cloudflare / nginx
+          description: Web Application Firewall and rate limiting
+      relationships:
+        - source: browser
+          target: waf
+          label: HTTPS
+        - source: waf
+          target: api
+          label: forward request
+    stack_tags: [security, gateway]
+    rationale: API gateway provides rate limiting, WAF, and DDoS protection at the edge.
+
+  - id: sec-rls
+    when:
+      quality: security
+      keywords: [multi-tenant, data isolation, row level, cô lập dữ liệu]
+    add:
+      elements: []
+      relationships: []
+    notes: Enable PostgreSQL Row Level Security on all user-scoped tables.
+    stack_tags: [security, database]
+    rationale: RLS enforces data isolation at the database level, preventing cross-tenant data leaks.
+
+  # Scalability
+  - id: scale-horizontal
+    when:
+      quality: scalability
+      keywords: [horizontal scaling, load balance, nhiều instance]
+    add:
+      elements:
+        - kind: container
+          name: Load Balancer
+          technology: nginx / Cloudflare
+          description: Distributes traffic across multiple API instances
+    stack_tags: [scalability]
+    rationale: Horizontal scaling allows adding more instances to handle increased load.
+
+  # IoT-specific
+  - id: iot-broker
+    when:
+      platform: iot
+      keywords: [MQTT, broker, pub/sub, telemetry]
+    add:
+      elements:
+        - kind: container
+          name: MQTT Broker
+          technology: EMQX / Mosquitto
+          description: Message broker for IoT device telemetry
+        - kind: container
+          name: Ingestion Service
+          technology: Node.js / Go
+          description: Processes incoming telemetry from broker
+        - kind: datastore
+          name: Time Series DB
+          technology: TimescaleDB / InfluxDB
+          description: Stores time-series sensor data
+      relationships:
+        - source: device
+          target: broker
+          label: publish telemetry
+          protocol: MQTT TLS
+        - source: broker
+          target: ingestion
+          label: subscribe and forward
+        - source: ingestion
+          target: tsdb
+          label: store time series
+    stack_tags: [iot, mqtt, time-series]
+    rationale: MQTT broker is the standard for IoT telemetry ingestion with low overhead.
+
+  - id: iot-ota-service
+    when:
+      platform: iot
+      keywords: [OTA, firmware update, over-the-air]
+    add:
+      elements:
+        - kind: container
+          name: OTA Service
+          technology: Node.js
+          description: Manages firmware version distribution and rollout
+      relationships:
+        - source: ota-service
+          target: device
+          label: push firmware update
+          protocol: HTTPS / MQTT
+    stack_tags: [iot, ota]
+    rationale: Dedicated OTA service manages firmware rollout with staged deployment and rollback.

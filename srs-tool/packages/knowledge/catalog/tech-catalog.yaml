@@ -1,0 +1,205 @@
+# Technology Catalog
+# Used by Stack Recommender to score and recommend technologies
+# Updated: 2026-10-23 (manually maintained; CI job can update versions via npm/GitHub API)
+version: "1.0.0"
+updated_at: "2026-10-23"
+
+entries:
+  # Frontend
+  - id: react
+    layer: frontend
+    name: React
+    version: "18.3"
+    license: MIT
+    platforms: [web]
+    tags: [spa, component-library, ecosystem]
+    maturity: high
+    learning_curve: medium
+    scores:
+      performance: 4
+      developer_experience: 5
+      ecosystem: 5
+      type_safety: 4
+    tradeoffs: >
+      Large ecosystem and community. Requires additional libraries (router, state).
+      JSX learning curve. Virtual DOM overhead for very high-frequency updates.
+    alternatives: [vue, svelte]
+
+  - id: vite
+    layer: bundler
+    name: Vite
+    version: "6.0"
+    license: MIT
+    platforms: [web]
+    tags: [bundler, dev-server, fast]
+    maturity: high
+    learning_curve: low
+    scores:
+      build_speed: 5
+      developer_experience: 5
+    tradeoffs: Fast HMR. ESM-first. Less legacy browser support out of the box.
+    alternatives: [webpack, rspack]
+
+  # Backend
+  - id: nestjs
+    layer: backend
+    name: NestJS
+    version: "10.4"
+    license: MIT
+    platforms: [web, mobile, iot]
+    tags: [framework, modular, dependency-injection, typescript]
+    maturity: high
+    learning_curve: medium
+    scores:
+      structure: 5
+      testability: 5
+      typescript: 5
+      performance: 4
+    tradeoffs: >
+      Opinionated structure reduces decision fatigue for teams.
+      DI container simplifies testing. Heavier than Fastify alone.
+      Angular-like decorators require familiarization.
+    alternatives: [hono, fastify]
+
+  - id: hono
+    layer: backend
+    name: Hono
+    version: "4.6"
+    license: MIT
+    platforms: [web, mobile, iot]
+    tags: [framework, lightweight, edge-ready, typescript]
+    maturity: medium
+    learning_curve: low
+    scores:
+      performance: 5
+      simplicity: 5
+      typescript: 5
+    tradeoffs: Minimal, edge-deployable. Less opinionated — team must provide structure.
+    alternatives: [nestjs, fastify]
+
+  # Database
+  - id: postgresql
+    layer: database
+    name: PostgreSQL + pgvector
+    version: "17"
+    license: PostgreSQL License (open source)
+    platforms: [web, mobile, iot]
+    tags: [relational, vector, rls, json]
+    maturity: high
+    learning_curve: medium
+    scores:
+      reliability: 5
+      feature_richness: 5
+      vector_search: 4
+      rls: 5
+    tradeoffs: >
+      Gold standard for relational data. pgvector enables vector similarity search.
+      Row Level Security for multi-tenant isolation. Managed options available.
+    alternatives: [mysql, cockroachdb]
+
+  - id: drizzle
+    layer: orm
+    name: Drizzle ORM
+    version: "0.36"
+    license: MIT
+    platforms: [web, mobile, iot]
+    tags: [orm, typescript, sql-first]
+    maturity: medium
+    learning_curve: low
+    scores:
+      type_safety: 5
+      performance: 5
+      pgvector_support: 4
+    tradeoffs: SQL-first with full type safety. Less magic than Prisma. Newer ecosystem.
+    alternatives: [prisma, kysely]
+
+  # Queue
+  - id: bullmq
+    layer: queue
+    name: BullMQ
+    version: "5.28"
+    license: MIT
+    platforms: [web, mobile, iot]
+    tags: [queue, redis, retry, priority, workers]
+    maturity: high
+    learning_curve: low
+    scores:
+      feature_richness: 5
+      reliability: 4
+      monitoring: 4
+    tradeoffs: >
+      Feature-rich Redis-based queue. Retry, delay, priority, rate limiting built-in.
+      Requires Redis. Bull Board provides UI monitoring.
+    alternatives: [temporal, pg-boss]
+
+  # Cache/Queue Backing Store
+  - id: redis
+    layer: cache
+    name: Redis
+    version: "7.4"
+    license: Redis Source Available License 2.0
+    platforms: [web, mobile, iot]
+    tags: [cache, queue, rate-limit, session]
+    maturity: high
+    learning_curve: low
+    scores:
+      performance: 5
+      versatility: 5
+    tradeoffs: >
+      Extremely fast in-memory store. Used for caching, BullMQ, rate limiting, sessions.
+      Persistence is optional. License changed in v7.4+ — check compliance.
+    alternatives: [valkey, dragonfly]
+
+  # Object Storage
+  - id: s3-compatible
+    layer: storage
+    name: S3-compatible Object Storage
+    version: "N/A"
+    license: varies
+    platforms: [web, mobile, iot]
+    tags: [storage, files, uploads, s3]
+    maturity: high
+    learning_curve: low
+    scores:
+      reliability: 5
+      scalability: 5
+    tradeoffs: >
+      Use AWS S3, Cloudflare R2 (no egress), or MinIO (self-hosted).
+      Pre-signed URLs for secure client uploads/downloads.
+    alternatives: [azure-blob, gcs]
+
+  # IoT
+  - id: emqx
+    layer: broker
+    name: EMQX
+    version: "5.8"
+    license: Apache 2.0 (community)
+    platforms: [iot]
+    tags: [mqtt, broker, scalable, iot]
+    maturity: high
+    learning_curve: medium
+    scores:
+      scalability: 5
+      protocol_support: 5
+      management: 4
+    tradeoffs: >
+      Enterprise-grade MQTT broker. Supports millions of concurrent connections.
+      Built-in rule engine. Free community edition; enterprise features are paid.
+    alternatives: [mosquitto, hivemq]
+
+  - id: timescaledb
+    layer: database
+    name: TimescaleDB
+    version: "2.17"
+    license: Timescale License
+    platforms: [iot]
+    tags: [time-series, postgresql, iot, sensor-data]
+    maturity: high
+    learning_curve: low
+    scores:
+      time_series_performance: 5
+      sql_compatibility: 5
+    tradeoffs: >
+      PostgreSQL extension for time-series. Automatic partitioning, compression,
+      continuous aggregates. Same SQL as PostgreSQL.
+    alternatives: [influxdb, questdb]

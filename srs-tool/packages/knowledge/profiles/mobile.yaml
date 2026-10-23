@@ -1,0 +1,122 @@
+version: "1.0.0"
+platform: mobile
+
+checklist:
+  - id: mob-platform
+    topic:
+      vi: Nền tảng và phiên bản hệ điều hành
+      en: Platform and OS version
+    keywords:
+      vi: [iOS, Android, đa nền tảng, phiên bản hệ điều hành, React Native, Flutter]
+      en: [iOS, Android, cross-platform, OS version, React Native, Flutter, Swift, Kotlin]
+    quality: compatibility
+    level: required
+    applies_when: null
+    question:
+      vi: Hỗ trợ iOS, Android hay cả hai? Phiên bản tối thiểu của từng hệ điều hành?
+      en: Support iOS, Android, or both? Minimum OS version for each?
+
+  - id: mob-offline
+    topic:
+      vi: Ngoại tuyến và đồng bộ
+      en: Offline and sync
+    keywords:
+      vi: [ngoại tuyến, offline, đồng bộ, sync, xung đột dữ liệu, cache cục bộ]
+      en: [offline, offline-first, sync, conflict resolution, local cache, background sync]
+    quality: reliability
+    level: required
+    applies_when: null
+    question:
+      vi: Chức năng nào phải dùng được khi mất mạng? Xử lý xung đột đồng bộ thế nào?
+      en: Which features must work offline? How are sync conflicts resolved?
+
+  - id: mob-network
+    topic:
+      vi: Mạng chập chờn
+      en: Intermittent network
+    keywords:
+      vi: [mạng yếu, timeout, thử lại, mất kết nối, 2G, 3G]
+      en: [weak network, timeout, retry, disconnection, 2G, 3G, slow connection]
+    quality: reliability
+    level: recommended
+    applies_when: null
+    question:
+      vi: Khi mạng yếu hoặc mất giữa chừng, ứng dụng xử lý thế nào?
+      en: How does the app behave when the network is weak or drops mid-operation?
+
+  - id: mob-push
+    topic:
+      vi: Thông báo đẩy
+      en: Push notifications
+    keywords:
+      vi: [thông báo đẩy, push notification, FCM, APNs, thông báo]
+      en: [push notification, FCM, APNs, remote notification, local notification]
+    quality: usability
+    level: recommended
+    applies_when: null
+    question:
+      vi: Loại sự kiện nào gửi thông báo đẩy? Người dùng có tắt được không?
+      en: Which events trigger push notifications? Can users opt out?
+
+  - id: mob-permission
+    topic:
+      vi: Quyền truy cập thiết bị
+      en: Device permissions
+    keywords:
+      vi: [quyền, camera, vị trí, danh bạ, microphone, permission]
+      en: [permission, camera, location, contacts, microphone, Bluetooth, storage]
+    quality: security
+    level: required
+    applies_when: null
+    question:
+      vi: Ứng dụng cần những quyền nào? Xử lý ra sao khi người dùng từ chối?
+      en: What permissions does the app request? How does it behave when denied?
+
+  - id: mob-secure-store
+    topic:
+      vi: Lưu dữ liệu nhạy cảm
+      en: Secure local storage
+    keywords:
+      vi: [Keychain, Keystore, mã hoá cục bộ, token, dữ liệu nhạy cảm]
+      en: [Keychain, Keystore, encrypted storage, token, sensitive data, biometrics]
+    quality: security
+    level: required
+    applies_when: null
+    question:
+      vi: Dữ liệu nhạy cảm lưu trên thiết bị được bảo vệ thế nào?
+      en: How is sensitive data stored securely on device?
+
+  - id: mob-battery
+    topic:
+      vi: Pin và tài nguyên
+      en: Battery and resource usage
+    keywords:
+      vi: [pin, battery, bộ nhớ, dữ liệu di động, tiêu thụ]
+      en: [battery, memory, mobile data, resource usage, background processing]
+    quality: efficiency
+    level: recommended
+    applies_when: null
+    question:
+      vi: Có giới hạn mức dùng pin, bộ nhớ hoặc dữ liệu di động không?
+      en: Are there battery, memory, or mobile data usage limits?
+
+  - id: mob-startup
+    topic:
+      vi: Thời gian khởi động
+      en: App startup time
+    keywords:
+      vi: [khởi động, thời gian mở ứng dụng, mượt, FPS, cold start]
+      en: [startup time, cold start, warm start, FPS, smooth, UI responsiveness]
+    quality: performance
+    level: recommended
+    applies_when: null
+    question:
+      vi: Thời gian mở ứng dụng và phản hồi giao diện tối đa là bao nhiêu?
+      en: What is the maximum acceptable app startup time and UI response time?
+
+default_values:
+  min_ios_version: "16.0"
+  min_android_api: 26
+  push_opt_out_allowed: true
+  offline_cache_days: 7
+  startup_time_cold_ms: 2000

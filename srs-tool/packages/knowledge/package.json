@@ -1,0 +1,32 @@
+{
+  "name": "@srs-tool/knowledge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Configuration knowledge: platform profiles, tech catalog, tactics, lint rules, prompts (YAML)",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./profiles/*": "./profiles/*",
+    "./catalog/*": "./catalog/*",
+    "./tactics/*": "./tactics/*",
+    "./lint-rules/*": "./lint-rules/*",
+    "./prompts/*": "./prompts/*"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,136 @@
+version: "1.0.0"
+platform: web
+
+checklist:
+  - id: web-browser
+    topic:
+      vi: Trình duyệt và màn hình hỗ trợ
+      en: Browser and screen support
+    keywords:
+      vi: [trình duyệt, browser, Chrome, Safari, responsive, màn hình]
+      en: [browser, Chrome, Firefox, Safari, Edge, responsive, screen size]
+    quality: compatibility
+    level: required
+    applies_when: null
+    question:
+      vi: Hệ thống hỗ trợ những trình duyệt, phiên bản và kích thước màn hình nào?
+      en: Which browsers, versions, and screen sizes must the system support?
+
+  - id: web-perf
+    topic:
+      vi: Thời gian tải và phản hồi
+      en: Page load and response time
+    keywords:
+      vi: [tải trang, thời gian phản hồi, LCP, thời gian chờ]
+      en: [page load, response time, LCP, latency, timeout, milliseconds]
+    quality: performance
+    level: required
+    applies_when: null
+    question:
+      vi: Thời gian tải hoặc phản hồi tối đa là bao nhiêu, ở bách phân vị nào?
+      en: What is the maximum page load or response time, at which percentile?
+
+  - id: web-load
+    topic:
+      vi: Tải đồng thời
+      en: Concurrent load
+    keywords:
+      vi: [đồng thời, người dùng cùng lúc, tải, concurrent]
+      en: [concurrent users, simultaneous, load, peak traffic, scale]
+    quality: scalability
+    level: required
+    applies_when: null
+    question:
+      vi: Số người dùng đồng thời dự kiến lúc thường và lúc cao điểm?
+      en: Expected concurrent users at normal and peak load?
+
+  - id: web-auth
+    topic:
+      vi: Đăng nhập và phiên
+      en: Authentication and session
+    keywords:
+      vi: [đăng nhập, phiên, session, OAuth, mật khẩu, xác thực]
+      en: [login, session, OAuth, password, authentication, SSO, MFA]
+    quality: security
+    level: required
+    applies_when: null
+    question:
+      vi: Xác thực bằng cách nào, phiên hết hạn sau bao lâu, khoá tài khoản khi nào?
+      en: How does authentication work, when do sessions expire, when are accounts locked?
+
+  - id: web-authz
+    topic:
+      vi: Phân quyền
+      en: Authorization
+    keywords:
+      vi: [vai trò, quyền, role, permission, phân quyền]
+      en: [role, permission, authorization, RBAC, access control]
+    quality: security
+    level: required
+    applies_when: null
+    question:
+      vi: Có những vai trò nào và mỗi vai trò làm được gì?
+      en: What roles exist and what can each role do?
+
+  - id: web-avail
+    topic:
+      vi: Khả dụng
+      en: Availability
+    keywords:
+      vi: [khả dụng, availability, uptime, thời gian ngừng, SLA]
+      en: [availability, uptime, SLA, downtime, maintenance window]
+    quality: reliability
+    level: recommended
+    applies_when: null
+    question:
+      vi: Mức khả dụng mục tiêu (SLA) và thời gian bảo trì cho phép?
+      en: Target availability (SLA) and allowed maintenance window?
+
+  - id: web-seo
+    topic:
+      vi: SEO và chia sẻ liên kết
+      en: SEO and link sharing
+    keywords:
+      vi: [SEO, SSR, sitemap, meta, tìm kiếm, lập chỉ mục]
+      en: [SEO, SSR, server-side rendering, sitemap, meta tags, crawl]
+    quality: performance
+    level: conditional
+    applies_when: public_site
+    question:
+      vi: Trang có cần được công cụ tìm kiếm lập chỉ mục không?
+      en: Does the site need to be indexed by search engines?
+
+  - id: web-a11y
+    topic:
+      vi: Khả năng truy cập
+      en: Accessibility
+    keywords:
+      vi: [WCAG, accessibility, đọc màn hình, khả năng truy cập]
+      en: [WCAG, accessibility, screen reader, aria, keyboard navigation]
+    quality: usability
+    level: recommended
+    applies_when: null
+    question:
+      vi: Có phải đáp ứng chuẩn truy cập nào không (ví dụ WCAG 2.1 AA)?
+      en: Must any accessibility standard be met (e.g., WCAG 2.1 AA)?
+
+  - id: web-i18n
+    topic:
+      vi: Đa ngôn ngữ và múi giờ
+      en: Internationalization and timezone
+    keywords:
+      vi: [đa ngôn ngữ, i18n, locale, múi giờ, tiếng Việt, tiếng Anh]
+      en: [internationalization, i18n, locale, timezone, language, multilingual]
+    quality: usability
+    level: recommended
+    applies_when: null
+    question:
+      vi: Hỗ trợ những ngôn ngữ, định dạng ngày giờ và múi giờ nào?
+      en: Which languages, date formats, and timezones must be supported?
+
+default_values:
+  response_time_p95_ms: 200
+  response_time_p99_ms: 500
+  availability_pct: 99.9
+  session_timeout_min: 30
+  max_concurrent_users: 1000

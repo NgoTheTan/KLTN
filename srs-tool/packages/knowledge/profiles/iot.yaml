@@ -1,0 +1,122 @@
+version: "1.0.0"
+platform: iot
+
+checklist:
+  - id: iot-hardware
+    topic:
+      vi: Phần cứng và giới hạn tài nguyên
+      en: Hardware and resource constraints
+    keywords:
+      vi: [vi điều khiển, MCU, bộ nhớ, flash, RAM, phần cứng]
+      en: [microcontroller, MCU, memory, flash, RAM, hardware, embedded]
+    quality: compatibility
+    level: required
+    applies_when: null
+    question:
+      vi: Thiết bị dùng phần cứng nào và giới hạn bộ nhớ, xử lý ra sao?
+      en: What hardware does the device use and what are the memory/processing constraints?
+
+  - id: iot-protocol
+    topic:
+      vi: Giao thức giao tiếp
+      en: Communication protocol
+    keywords:
+      vi: [MQTT, CoAP, HTTP, BLE, LoRa, Zigbee, giao thức]
+      en: [MQTT, CoAP, HTTP, BLE, LoRaWAN, Zigbee, protocol, communication]
+    quality: compatibility
+    level: required
+    applies_when: null
+    question:
+      vi: Thiết bị giao tiếp với hệ thống bằng giao thức nào?
+      en: Which protocol does the device use to communicate with the system?
+
+  - id: iot-connectivity
+    topic:
+      vi: Kết nối chập chờn
+      en: Intermittent connectivity
+    keywords:
+      vi: [mất kết nối, kết nối lại, lưu đệm, thử lại, offline]
+      en: [disconnection, reconnect, buffer, retry, offline, intermittent]
+    quality: reliability
+    level: required
+    applies_when: null
+    question:
+      vi: Khi mất kết nối, thiết bị lưu đệm dữ liệu được bao lâu và gửi bù thế nào?
+      en: When disconnected, how long can the device buffer data and how does it catch up?
+
+  - id: iot-ota
+    topic:
+      vi: Cập nhật firmware từ xa
+      en: Over-the-air firmware update
+    keywords:
+      vi: [OTA, cập nhật firmware, over-the-air, nâng cấp firmware]
+      en: [OTA, firmware update, over-the-air, remote update]
+    quality: maintainability
+    level: recommended
+    applies_when: null
+    question:
+      vi: Thiết bị cập nhật firmware bằng cách nào, và xử lý ra sao khi cập nhật lỗi?
+      en: How is device firmware updated, and what happens if an update fails?
+
+  - id: iot-identity
+    topic:
+      vi: Định danh và xác thực thiết bị
+      en: Device identity and authentication
+    keywords:
+      vi: [chứng chỉ, khoá thiết bị, provisioning, định danh thiết bị]
+      en: [certificate, device key, provisioning, device identity, PKI]
+    quality: security
+    level: required
+    applies_when: null
+    question:
+      vi: Mỗi thiết bị được định danh và xác thực với hệ thống thế nào?
+      en: How is each device identified and authenticated with the system?
+
+  - id: iot-data-rate
+    topic:
+      vi: Tần suất và khối lượng dữ liệu
+      en: Data rate and volume
+    keywords:
+      vi: [tần suất lấy mẫu, bản tin mỗi giây, khối lượng dữ liệu]
+      en: [sampling rate, messages per second, data volume, throughput, telemetry]
+    quality: performance
+    level: required
+    applies_when: null
+    question:
+      vi: Mỗi thiết bị gửi bao nhiêu bản tin, kích thước bao nhiêu, mỗi bao lâu?
+      en: How many messages does each device send, at what size and frequency?
+
+  - id: iot-safety
+    topic:
+      vi: An toàn thiết bị
+      en: Device safety
+    keywords:
+      vi: [an toàn, fail-safe, quá nhiệt, ngắt khẩn cấp, trạng thái an toàn]
+      en: [safety, fail-safe, overheat, emergency stop, safe state, watchdog]
+    quality: safety
+    level: conditional
+    applies_when: physical_control
+    question:
+      vi: Khi lỗi hoặc mất điều khiển, thiết bị phải chuyển sang trạng thái an toàn nào?
+      en: When failing or losing control, what safe state must the device enter?
+
+  - id: iot-power
+    topic:
+      vi: Điện năng và pin
+      en: Power and battery
+    keywords:
+      vi: [pin, tiêu thụ điện, chế độ ngủ, năng lượng, sạc]
+      en: [battery, power consumption, sleep mode, energy, charging, solar]
+    quality: efficiency
+    level: conditional
+    applies_when: battery_powered
+    question:
+      vi: Thiết bị cần chạy bao lâu bằng một lần sạc hoặc thay pin?
+      en: How long must the device run on a single charge or battery replacement?
+
+default_values:
+  reconnect_buffer_minutes: 30
+  ota_rollback_timeout_s: 300
+  telemetry_interval_s: 60
+  max_message_size_bytes: 4096
+  fleet_size: 1000
