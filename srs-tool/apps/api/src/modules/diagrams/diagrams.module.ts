@@ -1,6 +1,13 @@
 import { Module } from '@nestjs/common';
 import { DiagramsController } from './diagrams.controller';
 import { DiagramsService } from './diagrams.service';
+import { ArchitectureModule } from '../architecture/architecture.module';
+import { AuthModule } from '../auth/auth.module';
 
-@Module({ controllers: [DiagramsController], providers: [DiagramsService], exports: [DiagramsService] })
+@Module({
+  imports: [ArchitectureModule, AuthModule],
+  controllers: [DiagramsController],
+  providers: [DiagramsService],
+  exports: [DiagramsService],
+})
 export class DiagramsModule {}
