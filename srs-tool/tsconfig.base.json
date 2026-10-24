@@ -12,7 +12,14 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "incremental": true
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@srs-tool/schemas": ["packages/schemas/src/index.ts"],
+      "@srs-tool/plantuml-gen": ["packages/plantuml-gen/src/index.ts"],
+      "@srs-tool/pipeline": ["packages/pipeline/src/index.ts"],
+      "@srs-tool/llm": ["packages/llm/src/index.ts"]
+    }
   },
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

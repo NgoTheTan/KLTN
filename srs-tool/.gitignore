@@ -3,6 +3,8 @@ dist/
 .turbo/
 coverage/
 *.log
+*.tsbuildinfo
+.uploads/
 .env
 .env.local
 .env.*.local

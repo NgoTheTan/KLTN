@@ -33,7 +33,7 @@ export function generateContextDiagram(model: ArchitectureModel): string {
     '@startuml',
     '!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml',
     '',
-    `title System Context: ${escape(model.elements.find(e => e.kind === 'system')?.name ?? 'System')}`,
+    `title System Context: ${escape(model.elements.find((e: ArchElement) => e.kind === 'system')?.name ?? 'System')}`,
     '',
   ];
 
@@ -73,9 +73,9 @@ export function generateContainerDiagram(model: ArchitectureModel): string {
     '',
   ];
 
-  const containers = model.elements.filter(e => e.kind === 'container');
-  const systems = model.elements.filter(e => e.kind === 'system');
-  const persons = model.elements.filter(e => e.kind === 'person');
+  const containers = model.elements.filter((e: ArchElement) => e.kind === 'container');
+  const systems = model.elements.filter((e: ArchElement) => e.kind === 'system');
+  const persons = model.elements.filter((e: ArchElement) => e.kind === 'person');
 
   for (const el of persons) {
     lines.push(`Person(${el.id}, ${label(el.name)}, ${label(el.description ?? '')})`);
@@ -114,9 +114,9 @@ export function generateSequenceDiagram(
   ];
 
   // Declare participants
-  const participantIds = new Set(sequenceFlow.steps.flatMap(s => [s.from, s.to]));
+  const participantIds = new Set(sequenceFlow.steps.flatMap((s: { from: string; to: string }) => [s.from, s.to]));
   for (const id of participantIds) {
-    const el = model.elements.find(e => e.id === id);
+    const el = model.elements.find((e: ArchElement) => e.id === id);
     if (el) {
       lines.push(`participant ${label(el.name)} as ${id}`);
     }
@@ -146,14 +146,14 @@ export function generateComponentDiagram(
     '',
   ];
 
-  const container = model.elements.find(e => e.id === containerId);
+  const container = model.elements.find((e: ArchElement) => e.id === containerId);
   if (!container) return `@startuml\nnote: Container not found\n@enduml`;
 
   lines.push(`title Component View: ${escape(container.name)}`);
   lines.push('');
   lines.push(`Container_Boundary(${containerId}_b, ${label(container.name)}) {`);
 
-  const components = model.elements.filter(e => e.kind === 'component' && e.parent_id === containerId);
+  const components = model.elements.filter((e: ArchElement) => e.kind === 'component' && e.parent_id === containerId);
   for (const c of components) {
     lines.push(`  Component(${c.id}, ${label(c.name)}, ${label(c.technology ?? '')}, ${label(c.description ?? '')})`);
   }
@@ -161,7 +161,7 @@ export function generateComponentDiagram(
 
   lines.push('');
   for (const rel of model.relationships) {
-    const inScope = components.some(c => c.id === rel.source_id || c.id === rel.target_id);
+    const inScope = components.some((c: ArchElement) => c.id === rel.source_id || c.id === rel.target_id);
     if (inScope) {
       lines.push(`Rel(${rel.source_id}, ${rel.target_id}, ${label(rel.label ?? '')})`);
     }
