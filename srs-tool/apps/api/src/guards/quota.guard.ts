@@ -1,4 +1,5 @@
 import { CanActivate, ExecutionContext, Injectable, ForbiddenException } from '@nestjs/common';
+import { UsageService } from '../modules/usage/usage.service';
 
 /**
  * QuotaGuard — checks user's remaining LLM token quota before allowing pipeline runs.
@@ -6,12 +7,27 @@ import { CanActivate, ExecutionContext, Injectable, ForbiddenException } from '@
  */
 @Injectable()
 export class QuotaGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
-    // TODO: Read user from request, check remaining quota from UsageService
-    // const request = context.switchToHttp().getRequest();
-    // const mode = request.body?.mode;
-    // if (mode === 'eco') return true; // Eco mode uses no LLM tokens
-    // if (user.remainingTokens <= 0) throw new ForbiddenException('Token quota exceeded');
-    return true; // placeholder
+  constructor(private readonly usageService: UsageService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest();
+    const mode = request.body?.mode;
+
+    // Eco mode uses deterministic rules and local models only (0 LLM tokens consumed)
+    if (mode === 'eco') {
+      return true;
+    }
+
+    const userId = request.user?.id || '00000000-0000-0000-0000-000000000001';
+    const usage = await this.usageService.getCurrentUsage(userId);
+
+    if (usage.remainingTokens <= 0) {
+      throw new ForbiddenException(
+        'Daily LLM token quota exceeded. Switch to Eco mode (0 token cost) or wait for daily reset at ' +
+          usage.resetsAt,
+      );
+    }
+
+    return true;
   }
 }

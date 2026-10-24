@@ -52,3 +52,8 @@ export interface RenderPort {
   /** Render PlantUML source to SVG/PNG via the PlantUML container (no egress). */
   render(puml: string, format: 'svg' | 'png'): Promise<RenderResult>;
 }
+
+export * from './storage.adapter';
+export * from './queue.adapter';
+export * from './render.adapter';
+export * from './ports.module';
