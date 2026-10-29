@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, Inject, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, Logger, OnModuleInit } from '@nestjs/common';
 import { DatabaseService } from '../../db/database.service';
 import { projects, documents, segments, requirements, requirementSources, issues, runs, decisionLog } from '../../db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { QueuePort } from '../../ports';
 import { UsageService } from '../usage/usage.service';
 import { SseService } from './sse.service';
+import { loadCombinedChecklist } from '@srs-tool/knowledge';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -29,7 +30,7 @@ export interface PlatformChecklistItem {
 }
 
 @Injectable()
-export class ProjectsService {
+export class ProjectsService implements OnModuleInit {
   private readonly logger = new Logger(ProjectsService.name);
 
   constructor(
@@ -38,6 +39,25 @@ export class ProjectsService {
     private readonly usageService: UsageService,
     private readonly sseService: SseService,
   ) {}
+
+  onModuleInit() {
+    // Forward BullMQ background job progress to Server-Sent Events (SSE)
+    if (this.queue.onProgress) {
+      this.queue.onProgress(({ jobId, progress, data }) => {
+        this.sseService.emit(jobId, 'progress', { progress, ...(typeof data === 'object' ? data : {}) });
+      });
+    }
+    if (this.queue.onCompleted) {
+      this.queue.onCompleted(({ jobId }) => {
+        this.sseService.emit(jobId, 'status', { status: 'succeeded', progress: 100 });
+      });
+    }
+    if (this.queue.onFailed) {
+      this.queue.onFailed(({ jobId, failedReason }) => {
+        this.sseService.emit(jobId, 'error', { status: 'failed', message: failedReason });
+      });
+    }
+  }
 
   /**
    * Create a new project.
@@ -493,7 +513,17 @@ export class ProjectsService {
   }
 
   private loadPlatformChecklist(platforms: string[]): PlatformChecklistItem[] {
-    const items: PlatformChecklistItem[] = [];
+    try {
+      const yamlChecklist = loadCombinedChecklist(platforms);
+      if (yamlChecklist && yamlChecklist.length > 0) {
+        return yamlChecklist.map((item) => ({
+          ...item,
+          status: 'missing' as const,
+        }));
+      }
+    } catch (err: any) {
+      this.logger.debug(`Could not load YAML platform checklist: ${err.message}. Using built-in.`);
+    }
 
     // Fallback built-in checklist based on Tables in doc lines 1183-1237
     const defaultChecklists: PlatformChecklistItem[] = [

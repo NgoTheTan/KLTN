@@ -37,6 +37,12 @@ export interface QueuePort {
   enqueue(payload: JobPayload, options?: { priority?: number; delay?: number }): Promise<string>;
   /** Get job status. */
   getJobStatus(jobId: string): Promise<{ status: string; progress: number }>;
+  /** Subscribe to job progress events */
+  onProgress?(callback: (event: { jobId: string; progress: number; data?: any }) => void): void;
+  /** Subscribe to job completed events */
+  onCompleted?(callback: (event: { jobId: string; returnvalue?: any }) => void): void;
+  /** Subscribe to job failed events */
+  onFailed?(callback: (event: { jobId: string; failedReason: string }) => void): void;
 }
 
 // RenderPort
