@@ -21,8 +21,12 @@ import {
  *
  * Progress is published via BullMQ job progress (→ SSE to frontend).
  */
+import type { DatabaseInstance } from '@srs-tool/db';
+
 export class PipelineProcessor {
   private ledger = new CoverageLedger();
+
+  constructor(private readonly db?: DatabaseInstance) {}
 
   async process(job: Job): Promise<void> {
     const { runId, projectId, mode, fromStage = 1 } = job.data;

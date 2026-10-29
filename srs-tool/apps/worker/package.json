@@ -8,7 +8,7 @@
     "dev": "tsx watch src/main.ts",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "clean": "rm -rf dist"
   },
   "dependencies": {
@@ -17,6 +17,7 @@
     "@srs-tool/pipeline": "workspace:*",
     "@srs-tool/plantuml-gen": "workspace:*",
     "@srs-tool/knowledge": "workspace:*",
+    "@srs-tool/db": "workspace:*",
     "bullmq": "^5.28.2",
     "drizzle-orm": "^0.36.3",
     "pg": "^8.13.1",

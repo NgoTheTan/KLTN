@@ -12,7 +12,11 @@ import { generateDiagram } from '@srs-tool/plantuml-gen';
  * Does NOT call LLM by default.
  * LLM enrichment is an explicit opt-in ("Enrich with LLM" button).
  */
+import type { DatabaseInstance } from '@srs-tool/db';
+
 export class ArchProcessor {
+  constructor(private readonly db?: DatabaseInstance) {}
+
   async process(job: Job): Promise<void> {
     const { projectId, runId } = job.data;
 

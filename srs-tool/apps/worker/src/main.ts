@@ -1,5 +1,6 @@
 import { Worker, Queue, QueueEvents } from 'bullmq';
 import IORedis from 'ioredis';
+import { createDbPool, createDb } from '@srs-tool/db';
 import { PipelineProcessor } from './processors/pipeline.processor.js';
 import { ArchProcessor } from './processors/arch.processor.js';
 import { ExportProcessor } from './processors/export.processor.js';
@@ -8,13 +9,17 @@ const connection = new IORedis(process.env['REDIS_URL'] ?? 'redis://localhost:63
   maxRetriesPerRequest: null,
 });
 
+const pool = createDbPool({
+  connectionString: process.env['DATABASE_URL'],
+});
+const db = createDb(pool);
+
 const QUEUE_NAME = 'srs-jobs';
 
 // Register processors
-
-const pipelineProcessor = new PipelineProcessor();
-const archProcessor = new ArchProcessor();
-const exportProcessor = new ExportProcessor();
+const pipelineProcessor = new PipelineProcessor(db);
+const archProcessor = new ArchProcessor(db);
+const exportProcessor = new ExportProcessor(db);
 
 const worker = new Worker(
   QUEUE_NAME,

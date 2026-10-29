@@ -1,19 +1,24 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
-import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
-import * as schema from './schema';
+import {
+  createDbPool,
+  createDb,
+  runMigrations,
+  type DatabaseInstance,
+  schema,
+} from '@srs-tool/db';
 
-export type DrizzleDb = NodePgDatabase<typeof schema>;
+export type DrizzleDb = DatabaseInstance;
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
-  private pool?: Pool;
+  public pool?: Pool;
   public db?: DrizzleDb;
   public isConnected = false;
 
-  // In-memory fallback stores for offline/dev/testing
+  // In-memory fallback stores for offline unit tests / dev
   public memUsers = new Map<string, any>();
   public memProjects = new Map<string, any>();
   public memDocuments = new Map<string, any>();
@@ -40,20 +45,27 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     const databaseUrl = this.config.get<string>('DATABASE_URL');
     if (databaseUrl) {
       try {
-        this.pool = new Pool({
+        this.pool = createDbPool({
           connectionString: databaseUrl,
           max: 10,
           idleTimeoutMillis: 30000,
           connectionTimeoutMillis: 2000,
         });
+
         // Quick connection test
         const client = await this.pool.connect();
         client.release();
-        this.db = drizzle(this.pool, { schema });
+
+        // Run migrations
+        await runMigrations(this.pool);
+
+        this.db = createDb(this.pool);
         this.isConnected = true;
-        this.logger.log('Connected to PostgreSQL successfully with Drizzle ORM');
+        this.logger.log('Connected to PostgreSQL successfully with Drizzle ORM and initialized schema');
       } catch (err: any) {
-        this.logger.warn(`PostgreSQL connection failed (${err.message}). Using resilient in-memory storage fallback.`);
+        this.logger.warn(
+          `PostgreSQL connection or migration failed (${err.message}). Using in-memory fallback for local development.`,
+        );
         this.isConnected = false;
       }
     } else {

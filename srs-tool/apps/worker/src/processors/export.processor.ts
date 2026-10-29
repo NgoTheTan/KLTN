@@ -7,7 +7,11 @@ import type { Job } from 'bullmq';
  * Supported formats: Markdown, DOCX, CSV, JSON, .puml, SVG/PNG, ZIP (all).
  * Stores result in S3 with TTL; API provides pre-signed download link.
  */
+import type { DatabaseInstance } from '@srs-tool/db';
+
 export class ExportProcessor {
+  constructor(private readonly db?: DatabaseInstance) {}
+
   async process(job: Job): Promise<void> {
     const { projectId, exportId, formats } = job.data;
 
