@@ -18,7 +18,9 @@
       "@srs-tool/schemas": ["packages/schemas/src/index.ts"],
       "@srs-tool/plantuml-gen": ["packages/plantuml-gen/src/index.ts"],
       "@srs-tool/pipeline": ["packages/pipeline/src/index.ts"],
-      "@srs-tool/llm": ["packages/llm/src/index.ts"]
+      "@srs-tool/llm": ["packages/llm/src/index.ts"],
+      "@srs-tool/knowledge": ["packages/knowledge/src/index.ts"],
+      "@srs-tool/db": ["packages/db/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "dist", "**/*.test.ts"]

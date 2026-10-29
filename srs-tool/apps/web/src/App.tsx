@@ -1,9 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { ProjectsPage } from './pages/ProjectsPage.tsx';
-import { ProjectDetailPage } from './pages/ProjectDetailPage.tsx';
-import { RequirementsPage } from './pages/RequirementsPage.tsx';
-import { ArchitecturePage } from './pages/ArchitecturePage.tsx';
-import { DiagramEditorPage } from './pages/DiagramEditorPage.tsx';
+import { ProjectsPage } from './pages/ProjectsPage';
+import { ProjectDetailPage } from './pages/ProjectDetailPage';
+import { RequirementsPage } from './pages/RequirementsPage';
+import { ArchitecturePage } from './pages/ArchitecturePage';
+import { DiagramEditorPage } from './pages/DiagramEditorPage';
 
 export function App() {
   return (

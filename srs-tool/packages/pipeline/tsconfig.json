@@ -2,7 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@srs-tool/schemas": ["../schemas/dist/index.d.ts"],
+      "@srs-tool/llm": ["../llm/dist/index.d.ts"]
+    }
   },
   "include": ["src"]
 }

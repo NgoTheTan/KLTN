@@ -8,7 +8,11 @@
     "baseUrl": ".",
     "paths": {
       "@srs-tool/schemas": ["../../packages/schemas/dist/index.d.ts"],
-      "@srs-tool/plantuml-gen": ["../../packages/plantuml-gen/dist/index.d.ts"]
+      "@srs-tool/plantuml-gen": ["../../packages/plantuml-gen/dist/index.d.ts"],
+      "@srs-tool/pipeline": ["../../packages/pipeline/dist/index.d.ts"],
+      "@srs-tool/llm": ["../../packages/llm/dist/index.d.ts"],
+      "@srs-tool/knowledge": ["../../packages/knowledge/dist/index.d.ts"],
+      "@srs-tool/db": ["../../packages/db/dist/index.d.ts"]
     },
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true

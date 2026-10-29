@@ -1,0 +1,11 @@
+node_modules
+**/node_modules
+dist
+**/dist
+.turbo
+**/.turbo
+.git
+.github
+*.log
+.DS_Store
+Thumbs.db
