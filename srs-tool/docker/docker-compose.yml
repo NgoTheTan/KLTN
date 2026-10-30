@@ -13,6 +13,9 @@ services:
       - DATABASE_URL=postgres://srs:srs@postgres:5432/srsdb
       - REDIS_URL=redis://redis:6379
       - PLANTUML_URL=http://plantuml:8080
+      - UPLOAD_DIR=/data/uploads
+    volumes:
+      - uploads_data:/data/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,6 +36,9 @@ services:
       - REDIS_URL=redis://redis:6379
       - PLANTUML_URL=http://plantuml:8080
       - WORKER_CONCURRENCY=4
+      - UPLOAD_DIR=/data/uploads
+    volumes:
+      - uploads_data:/data/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,7 +55,7 @@ services:
       POSTGRES_PASSWORD: srs
       POSTGRES_DB: srsdb
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -59,6 +65,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
+      - public
       - internal
 
   # Redis
@@ -69,6 +76,7 @@ services:
     volumes:
       - redis_data:/data
     networks:
+      - public
       - internal
 
   # PlantUML Server (sandboxed — no egress network)
@@ -85,6 +93,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  uploads_data:
 
 networks:
   public:

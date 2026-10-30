@@ -13,5 +13,6 @@
       "@srs-tool/db": ["../../packages/db/dist/index.d.ts"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/scripts"]
 }

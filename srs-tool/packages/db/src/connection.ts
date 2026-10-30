@@ -18,7 +18,7 @@ export function createDbPool(config: DbConfig = {}): Pool {
   const connectionString =
     config.connectionString ||
     process.env['DATABASE_URL'] ||
-    'postgres://srs:srs@localhost:5432/srsdb';
+    'postgres://srs:srs@localhost:5433/srsdb';
 
   const poolConfig: PoolConfig = {
     connectionString,

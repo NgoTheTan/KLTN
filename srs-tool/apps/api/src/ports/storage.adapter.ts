@@ -11,7 +11,7 @@ export class LocalStorageAdapter implements StoragePort {
   private uploadDir: string;
 
   constructor(private readonly config: ConfigService) {
-    this.uploadDir = path.resolve(process.cwd(), '.uploads');
+    this.uploadDir = path.resolve(process.env['UPLOAD_DIR'] ?? path.join(process.cwd(), '.uploads'));
     if (!fs.existsSync(this.uploadDir)) {
       fs.mkdirSync(this.uploadDir, { recursive: true });
     }

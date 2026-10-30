@@ -9,6 +9,7 @@
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
+    "smoke": "tsx src/scripts/smoke-pipeline.ts",
     "clean": "rm -rf dist"
   },
   "dependencies": {
