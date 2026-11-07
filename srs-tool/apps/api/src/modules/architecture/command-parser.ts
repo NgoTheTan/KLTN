@@ -34,7 +34,7 @@ export class CommandParser {
       };
     }
 
-    // 2. remove element <id> (Vietnamese: xoá thành phần <id>)
+    // 2. remove element <id> 
     const removeMatch =
       trimmed.match(/^(?:remove\s+element|delete\s+element|xoá\s+(?:thành\s+phần\s+)?)\s*["']?([a-zA-Z0-9_-]+)["']?$/i);
     if (removeMatch) {

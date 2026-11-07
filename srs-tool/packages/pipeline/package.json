@@ -20,8 +20,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@srs-tool/schemas": "workspace:*",
     "@srs-tool/llm": "workspace:*",
+    "@srs-tool/schemas": "workspace:*",
+    "mammoth": "^1.13.0",
+    "unpdf": "^2.1.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
