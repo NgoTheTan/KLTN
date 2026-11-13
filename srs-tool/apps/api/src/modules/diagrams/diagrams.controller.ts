@@ -9,12 +9,12 @@ export class DiagramsController {
   constructor(private readonly service: DiagramsService) {}
 
   /**
-   * GET /diagrams/:id?format=svg|png|puml — Get diagram in requested format.
+   * GET /diagrams/:id?format=svg|png|puml|json — Get diagram in requested format.
    */
   @Get('diagrams/:id')
   async getDiagram(
     @Param('id') id: string,
-    @Query('format') format: 'svg' | 'png' | 'puml' = 'svg',
+    @Query('format') format: 'svg' | 'png' | 'puml' | 'json' = 'svg',
     @Res() res: any,
   ) {
     const result = await this.service.getDiagram(id, format);
@@ -29,11 +29,12 @@ export class DiagramsController {
       return res.send(result.png);
     }
 
+    res.header('Content-Type', 'application/json; charset=utf-8');
     return res.send(result);
   }
 
   /**
-   * PUT /diagrams/:id/puml — Update PlantUML code directly in detached mode.
+   * PUT /diagrams/:id/puml — Update PlantUML code directly in detached mode (validates air-gap safety).
    */
   @Put('diagrams/:id/puml')
   updatePuml(@Param('id') id: string, @Body() body: { puml: string }) {

@@ -34,11 +34,19 @@ export class ArchitectureController {
   }
 
   /**
-   * POST /projects/:projectId/architecture — Synthesize architecture model and stack.
+   * POST /projects/:projectId/architecture — Synthesize architecture model and stack from requirements & YAML catalogs.
    */
   @Post('projects/:projectId/architecture')
   synthesize(@Param('projectId') projectId: string) {
     return this.service.synthesizeArchitecture(projectId);
+  }
+
+  /**
+   * GET /projects/:projectId/stack — Get scored technology stack recommendations for project.
+   */
+  @Get('projects/:projectId/stack')
+  getProjectStack(@Param('projectId') projectId: string) {
+    return this.service.getTechRecommendations(projectId);
   }
 
   /**

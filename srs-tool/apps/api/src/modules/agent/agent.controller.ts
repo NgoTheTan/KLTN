@@ -1,4 +1,4 @@
-import { Controller, Post, Param, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, UseGuards, Req } from '@nestjs/common';
 import { AgentService } from './agent.service';
 import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
 import { RateLimitGuard } from '../../guards/rate-limit.guard';
@@ -18,8 +18,16 @@ export class AgentController {
   }
 
   /**
+   * GET /agent/sessions/:id — Get session details and proposed patch history.
+   */
+  @Get('sessions/:id')
+  getSession(@Param('id') sessionId: string) {
+    return this.service.getSession(sessionId);
+  }
+
+  /**
    * POST /agent/sessions/:id/messages — Send instruction or message to agent.
-   * Proposes patch and returns draft SVG preview.
+   * Proposes patch and returns draft SVG preview without mutating the live model.
    */
   @Post('sessions/:id/messages')
   sendMessage(
