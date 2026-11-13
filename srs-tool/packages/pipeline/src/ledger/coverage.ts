@@ -23,6 +23,15 @@ export class CoverageLedger {
   }
 
   /**
+   * Hydrate ledger from persisted segments (preserving their current coverage_status for S8 audit).
+   */
+  hydrateSegments(segments: Segment[]): void {
+    for (const seg of segments) {
+      this.segments.set(seg.id, { ...seg });
+    }
+  }
+
+  /**
    * Mark a segment as covered by a requirement.
    */
   markMapped(segmentId: string): void {

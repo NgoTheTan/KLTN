@@ -2,7 +2,8 @@
  * S1: Parse, Segment, Language Detection
  *
  * Responsibilities:
- * - Read raw document (PDF, DOCX, Markdown, plain text, email)
+ * - Read raw document (PDF via unpdf, DOCX via mammoth, Markdown, plain text, email)
+ * - Reject scanned/image-only PDFs lacking a text layer with an actionable error (FR-ING-008)
  * - Clean content (email: remove quoted replies, signatures, merge threads)
  * - Split into segments by structure, NOT mid-sentence
  * - Assign unique IDs and position locators to each segment
@@ -13,14 +14,31 @@
  * DOES NOT call LLM.
  */
 
+import * as mammoth from 'mammoth';
+import { extractText as extractPdfText } from 'unpdf';
 import type { Segment } from '@srs-tool/schemas';
 import type { CoverageLedger } from '../ledger/coverage.js';
 
+export class ScannedPdfError extends Error {
+  readonly code = 'SCANNED_PDF_UNSUPPORTED';
+  constructor(
+    message = 'Tệp PDF không có lớp văn bản (PDF ảnh quét/scan). Vui lòng tải bản PDF gốc xuất từ trình soạn thảo hoặc tệp DOCX/TXT.',
+  ) {
+    super(message);
+    this.name = 'ScannedPdfError';
+  }
+}
+
 export interface ParseSegmentInput {
   documentId: string;
-  content: string;
+  content: string | Buffer | Uint8Array;
   /** MIME type or file extension to determine parser */
-  contentType: 'text/plain' | 'text/markdown' | 'application/pdf' | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' | 'message/rfc822';
+  contentType:
+    | 'text/plain'
+    | 'text/markdown'
+    | 'application/pdf'
+    | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    | 'message/rfc822';
 }
 
 export interface ParseSegmentOutput {
@@ -31,6 +49,8 @@ interface RawBlock {
   text: string;
   /** 1-based line number where the block starts */
   line: number;
+  /** Optional 1-based page number for PDF documents */
+  page?: number;
   /** Nearest preceding heading (section path context) */
   heading?: string;
 }
@@ -46,11 +66,11 @@ export class S1ParseAndSegment {
   constructor(private readonly ledger: CoverageLedger) {}
 
   async process(input: ParseSegmentInput): Promise<ParseSegmentOutput> {
-    // 1. Parse raw content based on contentType
-    const rawText = await this.extractText(input.content, input.contentType);
+    // 1. Parse raw content (string or binary Buffer) based on contentType
+    const { rawText, pageBreakLines } = await this.extractDocumentText(input.content, input.contentType);
 
-    // 2. Split into structural segments (keeps line + heading locators)
-    const blocks = this.splitIntoBlocks(rawText);
+    // 2. Split into structural segments (keeps line + page + heading locators)
+    const blocks = this.splitIntoBlocks(rawText, pageBreakLines);
 
     // 3. Detect language per segment
     const segments: Segment[] = blocks.map((block, i) => ({
@@ -61,6 +81,7 @@ export class S1ParseAndSegment {
       locator: {
         ordinal: i,
         line: block.line,
+        ...(block.page ? { page: block.page } : {}),
         ...(block.heading ? { heading: block.heading } : {}),
       },
       language: this.detectLanguage(block.text),
@@ -74,17 +95,70 @@ export class S1ParseAndSegment {
     return { segments };
   }
 
-  /** Extract plain text from various document formats. */
-  private async extractText(content: string, contentType: string): Promise<string> {
-    // Normalise line endings and strip BOM / zero-width characters
-    let text = content.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').replace(/[\u200B-\u200D\u2060]/g, '');
+  /** Extract plain text from text, email, markdown, DOCX, or PDF buffers. */
+  private async extractDocumentText(
+    content: string | Buffer | Uint8Array,
+    contentType: ParseSegmentInput['contentType'],
+  ): Promise<{ rawText: string; pageBreakLines?: number[] }> {
+    if (contentType === 'application/pdf') {
+      if (typeof content !== 'string') {
+        const bytes = new Uint8Array(content.buffer, content.byteOffset, content.byteLength);
+        if (bytes.byteLength === 0) {
+          throw new ScannedPdfError('Tệp PDF rỗng (0 byte). Vui lòng tải tệp PDF hợp lệ.');
+        }
+        const extracted = await extractPdfText(bytes);
+        const pages = Array.isArray(extracted.text) ? extracted.text : [String(extracted.text ?? '')];
+        const pageBreakLines: number[] = [];
+        let runningLines = 1;
+        const normalizedPages = pages.map((p) => {
+          const clean = String(p ?? '').replace(/\r\n?/g, '\n').trim();
+          pageBreakLines.push(runningLines);
+          runningLines += clean.split('\n').length + 1;
+          return clean;
+        });
+        const joined = normalizedPages.join('\n\n');
+        if (joined.replace(/\s+/g, '').length < 20) {
+          throw new ScannedPdfError();
+        }
+        return { rawText: this.normalizeText(joined), pageBreakLines };
+      }
 
+      const norm = this.normalizeText(content);
+      if (norm.replace(/\s+/g, '').length < 20) {
+        throw new ScannedPdfError();
+      }
+      return { rawText: norm };
+    }
+
+    if (
+      contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
+      typeof content !== 'string'
+    ) {
+      const buf = Buffer.isBuffer(content) ? content : Buffer.from(content);
+      const res = await mammoth.extractRawText({ buffer: buf });
+      return { rawText: this.normalizeText(res.value ?? '') };
+    }
+
+    const asString =
+      typeof content === 'string'
+        ? content
+        : Buffer.isBuffer(content)
+          ? content.toString('utf-8')
+          : Buffer.from(content).toString('utf-8');
+
+    let text = this.normalizeText(asString);
     if (contentType === 'message/rfc822') {
       text = this.cleanEmail(text);
     }
-    // PDF/DOCX binary parsing is handled upstream by the ingestion layer, which hands
-    // us extracted text; here we only normalise whitespace.
-    return text.replace(/[ \t]+\n/g, '\n');
+    return { rawText: text };
+  }
+
+  private normalizeText(raw: string): string {
+    return raw
+      .replace(/^\uFEFF/, '')
+      .replace(/\r\n?/g, '\n')
+      .replace(/[\u200B-\u200D\u2060]/g, '')
+      .replace(/[ \t]+\n/g, '\n');
   }
 
   /**
@@ -94,7 +168,6 @@ export class S1ParseAndSegment {
   private cleanEmail(raw: string): string {
     const lines = raw.split('\n');
     let i = 0;
-    // Skip headers until first blank line (only if the first line looks like a header)
     if (/^[A-Za-z-]+:\s/.test(lines[0] ?? '')) {
       while (i < lines.length && lines[i]!.trim() !== '') i++;
       i++;
@@ -102,9 +175,9 @@ export class S1ParseAndSegment {
     const kept: string[] = [];
     for (; i < lines.length; i++) {
       const line = lines[i]!;
-      if (/^--\s*$/.test(line) || /^(Sent from my|Gửi từ)/i.test(line)) break; // signature
-      if (/^(On .+ wrote:|Vào .+ đã viết:|-{2,}\s*Original Message\s*-{2,})/i.test(line)) break; // quoted thread
-      if (/^\s*>/.test(line)) continue; // quoted reply line
+      if (/^--\s*$/.test(line) || /^(Sent from my|Gửi từ)/i.test(line)) break;
+      if (/^(On .+ wrote:|Vào .+ đã viết:|-{2,}\s*Original Message\s*-{2,})/i.test(line)) break;
+      if (/^\s*>/.test(line)) continue;
       kept.push(line);
     }
     return kept.join('\n');
@@ -113,10 +186,9 @@ export class S1ParseAndSegment {
   /**
    * Split text into structural blocks.
    * Boundaries: headings, blank lines, list items, table rows.
-   * NEVER splits mid-sentence; wrapped lines belonging to a paragraph or a list
-   * item are re-joined into one block.
+   * NEVER splits mid-sentence.
    */
-  private splitIntoBlocks(text: string): RawBlock[] {
+  private splitIntoBlocks(text: string, pageBreakLines?: number[]): RawBlock[] {
     const lines = text.split('\n');
     const blocks: RawBlock[] = [];
     let heading: string | undefined;
@@ -125,9 +197,25 @@ export class S1ParseAndSegment {
     let inFence = false;
     let tableHeaderSeen = false;
 
+    const resolvePage = (lineNo: number): number | undefined => {
+      if (!pageBreakLines || pageBreakLines.length === 0) return undefined;
+      let page = 1;
+      for (let p = 0; p < pageBreakLines.length; p++) {
+        if (lineNo >= pageBreakLines[p]!) page = p + 1;
+      }
+      return page;
+    };
+
     const flush = () => {
       const joined = current.join(' ').replace(/\s+/g, ' ').trim();
-      if (joined.length > 0) blocks.push({ text: joined, line: currentLine, heading });
+      if (joined.length > 0) {
+        blocks.push({
+          text: joined,
+          line: currentLine,
+          page: resolvePage(currentLine),
+          heading,
+        });
+      }
       current = [];
     };
 
@@ -141,7 +229,7 @@ export class S1ParseAndSegment {
         flush();
         continue;
       }
-      if (inFence) continue; // code blocks are not requirements
+      if (inFence) continue;
 
       if (trimmed === '') {
         flush();
@@ -161,9 +249,10 @@ export class S1ParseAndSegment {
         flush();
         if (TABLE_SEPARATOR.test(trimmed)) continue;
         if (!tableHeaderSeen) {
-          // first row is the header: remember context, not a requirement itself
           tableHeaderSeen = true;
-          heading = heading ? `${heading} / ${this.tableCells(trimmed).join(' | ')}` : this.tableCells(trimmed).join(' | ');
+          heading = heading
+            ? `${heading} / ${this.tableCells(trimmed).join(' | ')}`
+            : this.tableCells(trimmed).join(' | ');
           continue;
         }
         currentLine = lineNo;
@@ -197,14 +286,10 @@ export class S1ParseAndSegment {
 
   /**
    * Detect language using local rules (no LLM, no external API).
-   * Vietnamese: presence of diacritics (ạăắ...) and stop words
-   * English: absence of diacritics + common English stop words
    */
   private detectLanguage(text: string): 'vi' | 'en' {
-    // Vietnamese-only diacritics pattern (excludes plain Latin accents)
     const viPattern = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
     if (viPattern.test(text)) return 'vi';
-    // Unaccented Vietnamese is rare in specs but handle common stop words
     const viStop = /\b(he thong|nguoi dung|phai|duoc|va|cua|cho|khi)\b/i;
     const enStop = /\b(the|shall|must|should|and|of|to|when|system|user)\b/i;
     if (viStop.test(text) && !enStop.test(text)) return 'vi';

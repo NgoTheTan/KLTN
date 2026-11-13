@@ -1,5 +1,6 @@
 import type { LlmGateway } from '@srs-tool/llm';
 import type { ProcessingMode } from '@srs-tool/schemas';
+import type { LocalModelPort } from './local-model.port.js';
 
 // Decision types
 
@@ -55,6 +56,7 @@ export interface StageThresholds {
 export interface DecisionRouterConfig {
   mode: ProcessingMode;
   stageThresholds: Record<string, StageThresholds>;
+  localModel?: LocalModelPort;
   llmGateway?: LlmGateway;
   onLog?: (log: Omit<DecisionLog, 'id' | 'decidedAt'>) => Promise<void>;
 }

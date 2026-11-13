@@ -29,6 +29,12 @@ export interface Tier0ClassifyResult extends ClassifyOutput {
   confidence: number;
 }
 
+export interface GlossaryCandidate {
+  termVi: string;
+  termEn: string;
+  definition: string;
+}
+
 type Lang = 'vi' | 'en';
 
 // Quality attribute keywords (bilingual, ISO/IEC 25010)
@@ -158,5 +164,61 @@ export class S3ClassifyAndTag {
     const is_asr = (type === 'non-functional' && hasMetric) || (type === 'constraint' && quality.length > 0);
 
     return { type, platforms, is_asr, quality_attributes: quality, confidence };
+  }
+
+  /**
+   * Tier 0 bilingual glossary extraction (FR-REQ-015):
+   * Detects inline term definitions such as "Sổ phủ (Coverage Ledger)" or "OTA (Over-The-Air): ..."
+   * without calling an LLM.
+   */
+  extractGlossaryCandidates(segments: Array<{ text: string; language?: 'vi' | 'en' }>): GlossaryCandidate[] {
+    const found = new Map<string, GlossaryCandidate>();
+    const viDiacritic = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+
+    // Pattern 1: Phrase1 (Phrase2) where one side is Vietnamese and the other is English/Acronym
+    const parenPairRe = /([\p{L}][\p{L}\p{N}\s/-]{1,45}?)\s*\(([A-Za-z][A-Za-z0-9\s/-]{1,45})\)/gu;
+    // Pattern 2: Explicit glossary colon/dash line "TERM — Definition" under glossary-like structure
+    const acronymDefRe = /\b([A-Z]{2,8})\s*\(([A-Za-z][\w\s-]{3,50})\)/g;
+
+    for (const seg of segments) {
+      let m: RegExpExecArray | null;
+      parenPairRe.lastIndex = 0;
+      while ((m = parenPairRe.exec(seg.text)) !== null) {
+        const left = m[1]!.trim();
+        const right = m[2]!.trim();
+        if (left.split(/\s+/).length > 6 || right.split(/\s+/).length > 6) continue;
+        if (/^(ví dụ|vd|e\.g|i\.e|xem|see|hình|bảng)\b/i.test(left) || /^(ví dụ|vd|e\.g|i\.e)\b/i.test(right)) {
+          continue;
+        }
+        if (viDiacritic.test(left) && !viDiacritic.test(right)) {
+          // Trim leading stopwords like "cơ chế", "hệ thống", "bằng" if long
+          const cleanVi = left.replace(/^(?:các|một|những|trong|với|theo|gọi là|là)\s+/iu, '').trim();
+          const key = `${cleanVi.toLowerCase()}::${right.toLowerCase()}`;
+          if (cleanVi.length >= 2 && !found.has(key)) {
+            found.set(key, {
+              termVi: cleanVi,
+              termEn: right,
+              definition: seg.text.slice(0, 200),
+            });
+          }
+        }
+      }
+
+      acronymDefRe.lastIndex = 0;
+      while ((m = acronymDefRe.exec(seg.text)) !== null) {
+        const acro = m[1]!.trim();
+        const expanded = m[2]!.trim();
+        const key = `${acro.toLowerCase()}::${expanded.toLowerCase()}`;
+        if (!found.has(key)) {
+          found.set(key, {
+            termVi: acro,
+            termEn: expanded,
+            definition: `${acro}: ${expanded}`,
+          });
+        }
+      }
+    }
+
+    return [...found.values()];
   }
 }
