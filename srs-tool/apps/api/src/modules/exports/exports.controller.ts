@@ -9,7 +9,7 @@ export class ExportsController {
   constructor(private readonly service: ExportsService) {}
 
   /**
-   * POST /projects/:projectId/exports — Create an export package for project.
+   * POST /projects/:projectId/exports — Create an export package (ZIP / Markdown / CSV / PUML / SVG).
    */
   @Post('projects/:projectId/exports')
   createExport(
@@ -17,6 +17,14 @@ export class ExportsController {
     @Body() body: { formats?: string[] },
   ) {
     return this.service.createExport(projectId, body?.formats);
+  }
+
+  /**
+   * GET /projects/:projectId/exports — List export history for project.
+   */
+  @Get('projects/:projectId/exports')
+  listExports(@Param('projectId') projectId: string) {
+    return this.service.listExports(projectId);
   }
 
   /**
