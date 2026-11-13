@@ -1,0 +1,80 @@
+version: "1.0.0"
+platform: shared
+
+checklist:
+  - id: shared-backup
+    topic:
+      vi: Sao lưu và khôi phục dữ liệu
+      en: Backup and disaster recovery
+    keywords:
+      vi: [sao lưu, backup, khôi phục, recovery, RPO, RTO]
+      en: [backup, restore, disaster recovery, RPO, RTO, snapshot]
+    quality: reliability
+    level: required
+    applies_when: null
+    question:
+      vi: Chu kỳ sao lưu dữ liệu, mục tiêu RPO (mất dữ liệu tối đa) và RTO (thời gian khôi phục) là bao nhiêu?
+      en: What are the backup frequency, RPO (maximum data loss), and RTO (recovery time objective)?
+
+  - id: shared-audit
+    topic:
+      vi: Nhật ký kiểm toán và giám sát
+      en: Audit logging and observability
+    keywords:
+      vi: [nhật ký, log, audit, giám sát, cảnh báo, truy vết]
+      en: [audit log, logging, monitoring, metrics, tracing, alert]
+    quality: maintainability
+    level: required
+    applies_when: null
+    question:
+      vi: Những thao tác nhạy cảm nào phải ghi nhật ký kiểm toán và lưu giữ trong bao lâu?
+      en: Which sensitive actions must be audit-logged and for what retention period?
+
+  - id: shared-privacy
+    topic:
+      vi: Bảo vệ dữ liệu cá nhân và mã hoá
+      en: Data privacy, encryption, and retention
+    keywords:
+      vi: [dữ liệu cá nhân, quyền riêng tư, mã hoá, TLS, xoá dữ liệu, bảo mật]
+      en: [privacy, PII, GDPR, encryption, TLS, at rest, data retention, deletion]
+    quality: security
+    level: required
+    applies_when: null
+    question:
+      vi: Dữ liệu nhạy cảm nào cần mã hoá khi lưu trữ và thời hạn lưu giữ tối đa là bao lâu?
+      en: Which sensitive data must be encrypted at rest and what is the maximum retention period?
+
+  - id: shared-ratelimit
+    topic:
+      vi: Giới hạn tốc độ và chống lạm dụng
+      en: Rate limiting and abuse protection
+    keywords:
+      vi: [giới hạn tốc độ, rate limit, hạn mức, chống spam, quota]
+      en: [rate limit, throttle, quota, abuse, DDoS, anti-bot]
+    quality: security
+    level: recommended
+    applies_when: null
+    question:
+      vi: Giới hạn số yêu cầu tối đa trên mỗi người dùng/IP trong một phút là bao nhiêu?
+      en: What is the maximum request rate per user or IP per minute?
+
+  - id: shared-integration
+    topic:
+      vi: Xử lý lỗi tích hợp dịch vụ bên ngoài
+      en: External service failure handling
+    keywords:
+      vi: [bên thứ ba, tích hợp, webhook, thử lại, timeout, dự phòng]
+      en: [third-party, external API, webhook, retry, timeout, fallback]
+    quality: reliability
+    level: conditional
+    applies_when: external_integration
+    question:
+      vi: Khi dịch vụ bên thứ ba bị chậm hoặc lỗi, hệ thống xử lý timeout và dự phòng như thế nào?
+      en: How should the system handle timeouts, retries, and fallbacks when third-party services fail?
+
+default_values:
+  backup_rpo_hours: 24
+  backup_rto_hours: 4
+  audit_retention_days: 90
+  data_retention_days: 30
+  rate_limit_rpm: 60

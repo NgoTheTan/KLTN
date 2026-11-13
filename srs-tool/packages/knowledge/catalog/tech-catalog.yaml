@@ -203,3 +203,61 @@ entries:
       PostgreSQL extension for time-series. Automatic partitioning, compression,
       continuous aggregates. Same SQL as PostgreSQL.
     alternatives: [influxdb, questdb]
+
+  # Mobile
+  - id: react-native-expo
+    layer: mobile
+    name: React Native (Expo)
+    version: "52.0"
+    license: MIT
+    platforms: [mobile]
+    tags: [mobile, cross-platform, typescript, offline-sync, push]
+    maturity: high
+    learning_curve: low
+    scores:
+      developer_experience: 5
+      code_sharing: 5
+      ecosystem: 5
+      performance: 4
+    tradeoffs: >
+      Shares TypeScript schemas and domain logic with Web/API. Managed OTA updates
+      and push notifications via Expo. Heavy custom 3D/AR workloads may need native modules.
+    alternatives: [flutter, kotlin-swift-native]
+
+  - id: flutter
+    layer: mobile
+    name: Flutter
+    version: "3.27"
+    license: BSD-3-Clause
+    platforms: [mobile, web]
+    tags: [mobile, cross-platform, high-fps, custom-ui]
+    maturity: high
+    learning_curve: medium
+    scores:
+      performance: 5
+      ui_consistency: 5
+      ecosystem: 4
+    tradeoffs: >
+      Consistent 60/120fps Skia/Impeller rendering across iOS and Android.
+      Uses Dart rather than TypeScript, requiring separate DTO codegen.
+    alternatives: [react-native-expo, kotlin-swift-native]
+
+  # Authentication & Identity
+  - id: oauth2-jwt
+    layer: auth
+    name: OAuth 2.0 / OIDC + JWT
+    version: "RFC 6749 / 7519"
+    license: Open Standard
+    platforms: [web, mobile, iot]
+    tags: [auth, security, oauth, jwt, stateless]
+    maturity: high
+    learning_curve: low
+    scores:
+      security: 5
+      interoperability: 5
+      simplicity: 4
+    tradeoffs: >
+      Standardized federated login (Google/GitHub/OIDC) without storing passwords.
+      Short-lived access tokens with refresh rotation recommended for revocation control.
+    alternatives: [keycloak, auth0]
+
