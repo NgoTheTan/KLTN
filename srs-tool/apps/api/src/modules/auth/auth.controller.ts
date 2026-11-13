@@ -1,4 +1,13 @@
-import { Controller, Post, Get, Patch, Body, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Body,
+  Req,
+  UseGuards,
+  ForbiddenException,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
 
@@ -7,10 +16,13 @@ export class AuthController {
   constructor(private readonly service: AuthService) {}
 
   /**
-   * POST /auth/dev-token — Quick development login/token endpoint.
+   * POST /auth/dev-token — Quick development login/token endpoint (disabled in production).
    */
   @Post('dev-token')
   devToken(@Body() body: { email?: string }) {
+    if (process.env['NODE_ENV'] === 'production') {
+      throw new ForbiddenException('dev-token endpoint is disabled in production');
+    }
     return this.service.loginDev(body?.email || 'dev@srs-tool.local');
   }
 
@@ -32,11 +44,11 @@ export class AuthController {
   }
 
   /**
-   * PATCH /auth/me — Update user profile/locale.
+   * PATCH /auth/me — Update user locale ('vi' | 'en'). Self-escalation of `plan` is rejected.
    */
   @Patch('me')
   @UseGuards(JwtAuthGuard)
-  updateProfile(@Req() req: any, @Body() body: { locale?: string; plan?: string }) {
-    return this.service.updateProfile(req.user.id, body);
+  updateProfile(@Req() req: any, @Body() body: { locale?: string }) {
+    return this.service.updateProfile(req.user.id, { locale: body?.locale });
   }
 }

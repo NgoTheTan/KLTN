@@ -1,10 +1,12 @@
 import { Global, Module } from '@nestjs/common';
 import { LocalStorageAdapter } from './storage.adapter';
+import { StorageController } from './storage.controller';
 import { BullMQQueueAdapter } from './queue.adapter';
 import { PlantUMLRenderAdapter } from './render.adapter';
 
 @Global()
 @Module({
+  controllers: [StorageController],
   providers: [
     LocalStorageAdapter,
     BullMQQueueAdapter,

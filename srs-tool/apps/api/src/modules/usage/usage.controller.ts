@@ -3,12 +3,12 @@ import { UsageService } from './usage.service';
 import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
 
 @Controller('me')
+@UseGuards(JwtAuthGuard)
 export class UsageController {
   constructor(private readonly service: UsageService) {}
 
   /**
-   * GET /me/usage — Current user quota and usage.
-   * Returns daily_limit_tokens, used_tokens, remaining_tokens, resets_at.
+   * GET /me/usage — Current user quota and usage (UTC daily window).
    */
   @Get('usage')
   getUsage(@Req() req: any) {

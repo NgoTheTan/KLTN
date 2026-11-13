@@ -19,6 +19,10 @@ export interface StoragePort {
   presignedUrl(s3Key: string, ttlSeconds: number): Promise<string>;
   /** Delete a file from object storage. */
   delete(s3Key: string): Promise<void>;
+  /** Read raw bytes of a stored file by its s3Key. */
+  readFile?(s3Key: string): Promise<Buffer>;
+  /** Resolve validated absolute path on local storage if applicable. */
+  getFilePath?(s3Key: string): string;
 }
 
 // QueuePort
@@ -60,6 +64,7 @@ export interface RenderPort {
 }
 
 export * from './storage.adapter';
+export * from './storage.controller';
 export * from './queue.adapter';
 export * from './render.adapter';
 export * from './ports.module';

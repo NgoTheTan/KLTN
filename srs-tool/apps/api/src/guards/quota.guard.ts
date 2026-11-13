@@ -2,8 +2,8 @@ import { CanActivate, ExecutionContext, Injectable, ForbiddenException } from '@
 import { UsageService } from '../modules/usage/usage.service';
 
 /**
- * QuotaGuard — checks user's remaining LLM token quota before allowing pipeline runs.
- * Skips check for eco mode (no LLM tokens consumed).
+ * QuotaGuard — checks user's remaining LLM token quota and global monthly budget before allowing LLM runs.
+ * Always permits `eco` mode unconditionally (`NFR-LLM-002`: Eco mode consumes 0 LLM tokens).
  */
 @Injectable()
 export class QuotaGuard implements CanActivate {
@@ -11,11 +11,17 @@ export class QuotaGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const mode = request.body?.mode;
+    const mode = request.body?.mode ?? 'standard';
 
     // Eco mode uses deterministic rules and local models only (0 LLM tokens consumed)
     if (mode === 'eco') {
       return true;
+    }
+
+    if (await this.usageService.isGlobalBudgetExceeded()) {
+      throw new ForbiddenException(
+        'Global monthly LLM budget reached (NFR-LLM-004). Please run in Eco mode (0 token cost).',
+      );
     }
 
     const userId = request.user?.id || '00000000-0000-0000-0000-000000000001';

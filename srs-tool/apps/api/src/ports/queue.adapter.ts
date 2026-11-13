@@ -15,30 +15,44 @@ export class BullMQQueueAdapter implements QueuePort, OnModuleInit, OnModuleDest
   private completedListeners: Array<(event: { jobId: string; returnvalue?: any }) => void> = [];
   private failedListeners: Array<(event: { jobId: string; failedReason: string }) => void> = [];
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly config?: ConfigService) {}
 
   async onModuleInit() {
-    const redisUrl = this.config.get<string>('REDIS_URL') ?? 'redis://localhost:6379';
+    const rawRedisUrl = this.config?.get<string>('REDIS_URL') ?? process.env['REDIS_URL'];
+    if (rawRedisUrl === 'memory' || rawRedisUrl === 'disabled' || rawRedisUrl === '') {
+      this.logger.log('REDIS_URL disabled/memory. Running with in-memory job queue fallback.');
+      this.isRedisConnected = false;
+      return;
+    }
+
+    const redisUrl = rawRedisUrl ?? 'redis://localhost:6379';
     try {
       this.queue = new Queue('srs-jobs', {
         connection: {
           url: redisUrl,
           maxRetriesPerRequest: null,
-          connectTimeout: 2000,
+          connectTimeout: 1500,
+          retryStrategy: (times: number) => (times > 1 ? null : 150),
         },
       });
+      // Suppress unhandled error log spam during offline probe
+      this.queue.on('error', () => {});
 
-      // Test ping
-      await this.queue.waitUntilReady();
+      await Promise.race([
+        this.queue.waitUntilReady(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Redis connection timeout (1.5s)')), 1500)),
+      ]);
       this.isRedisConnected = true;
 
-      // Initialize QueueEvents to forward BullMQ worker progress/completed/failed events
       this.queueEvents = new QueueEvents('srs-jobs', {
         connection: {
           url: redisUrl,
           maxRetriesPerRequest: null,
+          connectTimeout: 1500,
+          retryStrategy: (times: number) => (times > 2 ? null : 250),
         },
       });
+      this.queueEvents.on('error', () => {});
 
       this.queueEvents.on('progress', ({ jobId, data }) => {
         const progressNum = typeof data === 'number' ? data : (data as any)?.progress ?? 0;
@@ -64,22 +78,25 @@ export class BullMQQueueAdapter implements QueuePort, OnModuleInit, OnModuleDest
 
       this.logger.log('Connected to Redis BullMQ queue and QueueEvents (srs-jobs)');
     } catch (err: any) {
-      this.logger.warn(`Redis queue connection failed (${err.message}). Using in-memory job queue fallback.`);
+      this.logger.warn(`Redis queue connection failed (${err?.message}). Using in-memory job queue fallback.`);
       this.isRedisConnected = false;
+      if (this.queue) {
+        await this.queue.close().catch(() => {});
+        this.queue = undefined;
+      }
     }
   }
 
   async onModuleDestroy() {
     if (this.queueEvents) {
-      await this.queueEvents.close();
+      await this.queueEvents.close().catch(() => {});
     }
     if (this.queue) {
-      await this.queue.close();
+      await this.queue.close().catch(() => {});
     }
   }
 
   async enqueue(payload: JobPayload, options?: { priority?: number; delay?: number }): Promise<string> {
-    // Crucial: use payload.runId as BullMQ jobId so status and events correspond 1-to-1 with runId
     const jobId = payload.runId || `job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     this.inMemoryJobs.set(jobId, { payload, status: 'queued', progress: 0 });
 
@@ -109,7 +126,7 @@ export class BullMQQueueAdapter implements QueuePort, OnModuleInit, OnModuleDest
           const progress = typeof job.progress === 'number' ? job.progress : 0;
           return { status: state, progress };
         }
-      } catch (err) {
+      } catch {
         // Fall back to in-memory lookup
       }
     }

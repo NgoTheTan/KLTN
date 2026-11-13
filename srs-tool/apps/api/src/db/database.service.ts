@@ -39,10 +39,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   public memAgentPatches = new Map<string, any>();
   public memDecisionLogs: any[] = [];
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly config?: ConfigService) {}
 
   async onModuleInit() {
-    const databaseUrl = this.config.get<string>('DATABASE_URL');
+    const databaseUrl = this.config?.get<string>('DATABASE_URL') ?? process.env['DATABASE_URL'];
     if (databaseUrl) {
       try {
         this.pool = createDbPool({
