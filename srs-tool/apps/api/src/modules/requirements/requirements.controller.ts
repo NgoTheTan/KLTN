@@ -13,6 +13,7 @@ import {
   RequirementsService,
   RequirementFilters,
   CreateRequirementDto,
+  UpdateRequirementDto,
 } from './requirements.service';
 import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
 import { RateLimitGuard } from '../../guards/rate-limit.guard';
@@ -42,7 +43,7 @@ export class RequirementsController {
       status,
       ears_pattern,
       is_asr: is_asr !== undefined ? is_asr === 'true' : undefined,
-      min_quality_score: min_quality_score ? parseInt(min_quality_score) : undefined,
+      min_quality_score: min_quality_score ? parseInt(min_quality_score, 10) : undefined,
       search,
     };
     return this.service.findAll(projectId, filters);
@@ -76,7 +77,7 @@ export class RequirementsController {
   update(
     @Param('projectId') projectId: string,
     @Param('id') id: string,
-    @Body() body: Partial<CreateRequirementDto>,
+    @Body() body: UpdateRequirementDto,
     @Req() req: any,
   ) {
     const changedBy = req.user?.email || 'user';
@@ -104,7 +105,7 @@ export class RequirementsController {
     @Query('v1') v1: string,
     @Query('v2') v2: string,
   ) {
-    return this.service.diff(projectId, id, parseInt(v1), parseInt(v2));
+    return this.service.diff(projectId, id, parseInt(v1, 10), parseInt(v2, 10));
   }
 
   /**
@@ -116,14 +117,14 @@ export class RequirementsController {
   }
 
   /**
-   * POST /questions/:id/answer — Answer clarification question.
+   * POST /questions/:id/answer — Answer or skip clarification question.
    */
   @Post('questions/:id/answer')
   answerQuestion(
     @Param('id') id: string,
-    @Body() body: { answer: string; skip?: boolean },
+    @Body() body: { answer?: string; skip?: boolean },
   ) {
-    return this.service.answerQuestion(id, body.answer, body.skip);
+    return this.service.answerQuestion(id, body.answer ?? '', body.skip ?? false);
   }
 
   /**

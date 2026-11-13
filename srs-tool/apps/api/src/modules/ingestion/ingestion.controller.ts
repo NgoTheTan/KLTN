@@ -1,4 +1,13 @@
-import { Controller, Post, Get, Param, Body, UseGuards, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+  BadRequestException,
+} from '@nestjs/common';
 import { IngestionService } from './ingestion.service';
 import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
 import { RateLimitGuard } from '../../guards/rate-limit.guard';
@@ -27,7 +36,7 @@ export class IngestionController {
       const buffer = Buffer.from(body.contentBase64, 'base64');
       return this.service.ingestFile(projectId, {
         buffer,
-        filename: body.filename || `upload_${Date.now()}.bin`,
+        filename: body.filename || `upload_${Date.now()}.txt`,
         mimeType: body.mimeType || 'application/octet-stream',
         kind: body.kind,
       });
@@ -58,5 +67,13 @@ export class IngestionController {
   @Get('documents/:id')
   getDocument(@Param('id') id: string) {
     return this.service.getDocument(id);
+  }
+
+  /**
+   * DELETE /documents/:id — Remove document and its stored original file.
+   */
+  @Delete('documents/:id')
+  deleteDocument(@Param('id') id: string) {
+    return this.service.deleteDocument(id);
   }
 }

@@ -1,13 +1,30 @@
-import { Injectable, NotFoundException, Inject, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  ConflictException,
+  BadRequestException,
+  Inject,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { DatabaseService } from '../../db/database.service';
-import { projects, documents, segments, requirements, requirementSources, issues, runs, decisionLog } from '../../db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import {
+  projects,
+  segments,
+  requirements,
+  requirementSources,
+  issues,
+  questions,
+  runs,
+  decisionLog,
+} from '../../db/schema';
+import { eq, and, desc, inArray, ne } from 'drizzle-orm';
 import { QueuePort } from '../../ports';
 import { UsageService } from '../usage/usage.service';
 import { SseService } from './sse.service';
 import { loadCombinedChecklist } from '@srs-tool/knowledge';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as crypto from 'crypto';
 
 export interface CreateProjectDto {
   name: string;
@@ -63,12 +80,16 @@ export class ProjectsService implements OnModuleInit {
    * Create a new project.
    */
   async create(data: CreateProjectDto, ownerId: string = '00000000-0000-0000-0000-000000000001') {
+    if (!data.name || data.name.trim().length === 0) {
+      throw new BadRequestException('Project name cannot be empty');
+    }
+
     const id = crypto.randomUUID();
     const newProject = {
       id,
       ownerId,
-      name: data.name,
-      platforms: data.platforms || ['web'],
+      name: data.name.trim(),
+      platforms: data.platforms && data.platforms.length > 0 ? data.platforms : ['web'],
       outputLanguage: data.output_language || 'vi',
       constraints: data.constraints || {},
       createdAt: new Date(),
@@ -76,17 +97,12 @@ export class ProjectsService implements OnModuleInit {
     };
 
     if (this.dbService.isConnected && this.dbService.db) {
-      try {
-        await this.dbService.db.insert(projects).values(newProject);
-      } catch (err: any) {
-        this.logger.warn(`Failed to insert project into DB (${err.message}). Using memory fallback.`);
-        this.dbService.memProjects.set(id, newProject);
-      }
+      await this.dbService.db.insert(projects).values(newProject);
     } else {
       this.dbService.memProjects.set(id, newProject);
     }
 
-    this.logger.log(`Created project '${data.name}' (${id}) for owner=${ownerId}`);
+    this.logger.log(`Created project '${newProject.name}' (${id}) for owner=${ownerId}`);
     return newProject;
   }
 
@@ -95,13 +111,11 @@ export class ProjectsService implements OnModuleInit {
    */
   async findAll(ownerId: string = '00000000-0000-0000-0000-000000000001') {
     if (this.dbService.isConnected && this.dbService.db) {
-      try {
-        return await this.dbService.db
-          .select()
-          .from(projects)
-          .where(eq(projects.ownerId, ownerId))
-          .orderBy(desc(projects.createdAt));
-      } catch {}
+      return await this.dbService.db
+        .select()
+        .from(projects)
+        .where(eq(projects.ownerId, ownerId))
+        .orderBy(desc(projects.createdAt));
     }
 
     const list: any[] = [];
@@ -112,17 +126,14 @@ export class ProjectsService implements OnModuleInit {
   }
 
   /**
-   * Get project by ID with stats summary.
+   * Get project by ID with stats summary. Enforces ownership when `requesterId` is provided.
    */
-  async findOne(id: string) {
+  async findOne(id: string, requesterId?: string) {
     let project: any;
     if (this.dbService.isConnected && this.dbService.db) {
-      try {
-        const found = await this.dbService.db.select().from(projects).where(eq(projects.id, id)).limit(1);
-        if (found.length > 0) project = found[0];
-      } catch {}
-    }
-    if (!project) {
+      const found = await this.dbService.db.select().from(projects).where(eq(projects.id, id)).limit(1);
+      if (found.length > 0) project = found[0];
+    } else {
       project = this.dbService.memProjects.get(id);
     }
 
@@ -130,7 +141,10 @@ export class ProjectsService implements OnModuleInit {
       throw new NotFoundException(`Project '${id}' not found`);
     }
 
-    // Attach counts
+    if (requesterId && project.ownerId && project.ownerId !== requesterId) {
+      throw new ForbiddenException('You do not have permission to access this project');
+    }
+
     const coverage = await this.getCoverage(id);
     return {
       ...project,
@@ -141,10 +155,9 @@ export class ProjectsService implements OnModuleInit {
   /**
    * Update project.
    */
-  async update(id: string, data: Partial<CreateProjectDto>) {
-    const project = await this.findOne(id);
-    const updated = {
-      ...project,
+  async update(id: string, data: Partial<CreateProjectDto>, requesterId?: string) {
+    const project = await this.findOne(id, requesterId);
+    const patchFields = {
       name: data.name ?? project.name,
       platforms: data.platforms ?? project.platforms,
       outputLanguage: data.output_language ?? project.outputLanguage,
@@ -153,50 +166,59 @@ export class ProjectsService implements OnModuleInit {
     };
 
     if (this.dbService.isConnected && this.dbService.db) {
-      try {
-        await this.dbService.db.update(projects).set(updated).where(eq(projects.id, id));
-      } catch {}
+      await this.dbService.db.update(projects).set(patchFields).where(eq(projects.id, id));
+    } else {
+      this.dbService.memProjects.set(id, { ...project, ...patchFields });
     }
-    this.dbService.memProjects.set(id, updated);
-    return updated;
+    return this.findOne(id, requesterId);
   }
 
   /**
    * Delete project.
    */
-  async delete(id: string) {
+  async delete(id: string, requesterId?: string) {
+    await this.findOne(id, requesterId);
     if (this.dbService.isConnected && this.dbService.db) {
-      try {
-        await this.dbService.db.delete(projects).where(eq(projects.id, id));
-      } catch {}
+      await this.dbService.db.delete(projects).where(eq(projects.id, id));
+    } else {
+      this.dbService.memProjects.delete(id);
     }
-    this.dbService.memProjects.delete(id);
     return { success: true, id };
   }
 
   /**
-   * GET /projects/:id/coverage — Real Coverage Ledger computation.
+   * GET /projects/:id/coverage — Real Coverage Ledger computation scoped strictly to `projectId`.
    */
   async getCoverage(projectId: string) {
     let segList: any[] = [];
-    let sourcesMap = new Set<string>();
+    const sourcesMap = new Set<string>();
 
     if (this.dbService.isConnected && this.dbService.db) {
-      try {
-        segList = await this.dbService.db
-          .select()
-          .from(segments)
-          .where(eq(segments.projectId, projectId));
+      segList = await this.dbService.db
+        .select()
+        .from(segments)
+        .where(eq(segments.projectId, projectId));
 
-        const reqSources = await this.dbService.db.select().from(requirementSources);
+      const segIds = segList.map((s) => s.id);
+      if (segIds.length > 0) {
+        const reqSources = await this.dbService.db
+          .select()
+          .from(requirementSources)
+          .where(inArray(requirementSources.segmentId, segIds));
         for (const s of reqSources) {
           sourcesMap.add(s.segmentId);
         }
-      } catch {
-        segList = Array.from(this.dbService.memSegments.values()).filter((s) => s.projectId === projectId);
       }
     } else {
       segList = Array.from(this.dbService.memSegments.values()).filter((s) => s.projectId === projectId);
+      const segIds = new Set(segList.map((s) => s.id));
+      for (const links of this.dbService.memRequirementSources.values()) {
+        for (const link of links) {
+          if (segIds.has(link.segmentId)) {
+            sourcesMap.add(link.segmentId);
+          }
+        }
+      }
     }
 
     const total_segments = segList.length;
@@ -232,70 +254,70 @@ export class ProjectsService implements OnModuleInit {
 
   /**
    * GET /projects/:id/checklist — Platform Checklist evaluated against project requirements and segments.
+   * Uses `@srs-tool/knowledge` YAML profiles (`shared.yaml` + selected platform profiles).
    */
   async getChecklist(projectId: string): Promise<PlatformChecklistItem[]> {
     const project = await this.findOne(projectId);
     const platforms: string[] = project.platforms || ['web'];
-    const checklistItems = this.loadPlatformChecklist(platforms);
+    const checklistItems = loadCombinedChecklist(platforms);
 
-    // Get requirements and segments for keyword matching
     let reqs: any[] = [];
     let segs: any[] = [];
-    let dismissedIssues = new Map<string, string>(); // ruleId -> reason
+    const dismissedIssues = new Map<string, string>(); // normalized checklist item id -> reason
 
     if (this.dbService.isConnected && this.dbService.db) {
-      try {
-        reqs = await this.dbService.db.select().from(requirements).where(eq(requirements.projectId, projectId));
-        segs = await this.dbService.db.select().from(segments).where(eq(segments.projectId, projectId));
-        const issueList = await this.dbService.db
-          .select()
-          .from(issues)
-          .where(and(eq(issues.projectId, projectId), eq(issues.status, 'not_applicable')));
-        for (const iss of issueList) {
-          dismissedIssues.set(iss.ruleId, iss.reason || 'User marked not applicable');
-        }
-      } catch {}
+      reqs = await this.dbService.db.select().from(requirements).where(eq(requirements.projectId, projectId));
+      segs = await this.dbService.db.select().from(segments).where(eq(segments.projectId, projectId));
+      const issueList = await this.dbService.db
+        .select()
+        .from(issues)
+        .where(and(eq(issues.projectId, projectId), eq(issues.status, 'not_applicable')));
+      for (const iss of issueList) {
+        const cleanId = String(iss.ruleId || '').replace(/^CHECKLIST[-:]/i, '');
+        dismissedIssues.set(cleanId, iss.reason || 'User marked not applicable');
+      }
     } else {
       reqs = Array.from(this.dbService.memRequirements.values()).filter((r) => r.projectId === projectId);
       segs = Array.from(this.dbService.memSegments.values()).filter((s) => s.projectId === projectId);
       for (const iss of this.dbService.memIssues.values()) {
         if (iss.projectId === projectId && iss.status === 'not_applicable') {
-          dismissedIssues.set(iss.ruleId, iss.reason || 'User marked not applicable');
+          const cleanId = String(iss.ruleId || '').replace(/^CHECKLIST[-:]/i, '');
+          dismissedIssues.set(cleanId, iss.reason || 'User marked not applicable');
         }
       }
     }
 
     return checklistItems.map((item) => {
-      // Check if user marked not applicable
       if (dismissedIssues.has(item.id)) {
         return {
           ...item,
-          status: 'not_applicable',
+          status: 'not_applicable' as const,
           reason: dismissedIssues.get(item.id),
         };
       }
 
       const allKeywords = [...(item.keywords.vi || []), ...(item.keywords.en || [])].map((k) => k.toLowerCase());
 
-      // 1. Check against requirements
+      // 1. Check against extracted/normalized requirements
       for (const req of reqs) {
+        if (req.status === 'rejected') continue;
         const text = `${req.statement || ''} ${req.statementOriginal || ''}`.toLowerCase();
         if (allKeywords.some((kw) => text.includes(kw))) {
           return {
             ...item,
-            status: 'covered',
+            status: 'covered' as const,
             matchedRequirementId: req.id,
           };
         }
       }
 
-      // 2. Check against raw segments (mentioned but not yet requirement)
+      // 2. Check against raw segments (mentioned but not yet normalized into a requirement)
       for (const seg of segs) {
         const text = (seg.text || '').toLowerCase();
         if (allKeywords.some((kw) => text.includes(kw))) {
           return {
             ...item,
-            status: 'mentioned',
+            status: 'mentioned' as const,
           };
         }
       }
@@ -303,49 +325,181 @@ export class ProjectsService implements OnModuleInit {
       // 3. Missing
       return {
         ...item,
-        status: 'missing',
+        status: 'missing' as const,
       };
     });
   }
 
   /**
-   * PATCH /projects/:id/checklist/:itemId — Mark checklist item as not applicable or unmark.
+   * PATCH /projects/:id/checklist/:itemId — Mark checklist item as not applicable or re-open.
+   * Uses proper UUID primary keys on `issues` and canonical `CHECKLIST-<itemId>` ruleId.
    */
   async updateChecklistItem(
     projectId: string,
     itemId: string,
     data: { not_applicable: boolean; reason?: string },
   ) {
-    const issueId = `iss_chk_${projectId}_${itemId}`;
-    const status = data.not_applicable ? 'not_applicable' : 'resolved';
-    const reason = data.reason || 'Marked by user';
-
-    const record = {
-      id: issueId,
-      projectId,
-      kind: 'missing',
-      ruleId: itemId,
-      severity: 'warning',
-      status,
-      reason,
-      createdAt: new Date(),
-    };
+    const cleanItemId = itemId.replace(/^CHECKLIST[-:]/i, '');
+    const canonicalRuleId = `CHECKLIST-${cleanItemId}`;
+    const status = data.not_applicable ? 'not_applicable' : 'open';
+    const reason = data.not_applicable ? data.reason || 'Marked not applicable by user' : null;
 
     if (this.dbService.isConnected && this.dbService.db) {
-      try {
+      const existing = await this.dbService.db
+        .select()
+        .from(issues)
+        .where(
+          and(
+            eq(issues.projectId, projectId),
+            inArray(issues.ruleId, [canonicalRuleId, cleanItemId, `CHECKLIST:${cleanItemId}`]),
+          ),
+        )
+        .limit(1);
+
+      if (existing.length > 0) {
         await this.dbService.db
-          .insert(issues)
-          .values(record)
-          .onConflictDoUpdate({ target: issues.id, set: { status, reason } });
-      } catch {}
+          .update(issues)
+          .set({ status, reason })
+          .where(eq(issues.id, existing[0]!.id));
+      } else {
+        await this.dbService.db.insert(issues).values({
+          id: crypto.randomUUID(),
+          projectId,
+          requirementId: null,
+          kind: 'missing',
+          ruleId: canonicalRuleId,
+          severity: 'warning',
+          status,
+          reason,
+          createdAt: new Date(),
+        });
+      }
+    } else {
+      let matchedKey: string | undefined;
+      for (const [k, iss] of this.dbService.memIssues.entries()) {
+        const cleanRule = String(iss.ruleId || '').replace(/^CHECKLIST[-:]/i, '');
+        if (iss.projectId === projectId && cleanRule === cleanItemId) {
+          matchedKey = k;
+          break;
+        }
+      }
+      const id = matchedKey ?? crypto.randomUUID();
+      this.dbService.memIssues.set(id, {
+        id,
+        projectId,
+        requirementId: null,
+        kind: 'missing',
+        ruleId: canonicalRuleId,
+        severity: 'warning',
+        status,
+        reason,
+        createdAt: new Date(),
+      });
     }
-    this.dbService.memIssues.set(issueId, record);
 
     return {
       projectId,
-      itemId,
+      itemId: cleanItemId,
+      ruleId: canonicalRuleId,
       status,
       reason,
+    };
+  }
+
+  /**
+   * POST /projects/:id/lock-baseline — Enforces the 3 baseline gates before locking requirements:
+   * 1. Coverage Ledger has 0 `unmapped` and 0 `unresolved` segments (`FR-ING-007` / `FR-REQ-011`)
+   * 2. No pending clarification questions remain
+   * 3. Every `origin === 'inferred'` requirement has been explicitly confirmed (`status === 'approved' | 'baseline'`, `FR-REQ-008`)
+   */
+  async lockBaseline(projectId: string, requesterId?: string) {
+    const project = await this.findOne(projectId, requesterId);
+    const coverage = await this.getCoverage(projectId);
+
+    if (coverage.unmapped > 0 || coverage.unresolved > 0) {
+      throw new ConflictException(
+        `Cannot lock baseline: Coverage Ledger has ${coverage.unmapped} unmapped and ${coverage.unresolved} unresolved segment(s). Complete or clarify all segments first.`,
+      );
+    }
+
+    let pendingQuestions: any[] = [];
+    let activeReqs: any[] = [];
+
+    if (this.dbService.isConnected && this.dbService.db) {
+      pendingQuestions = await this.dbService.db
+        .select()
+        .from(questions)
+        .where(and(eq(questions.projectId, projectId), eq(questions.status, 'pending')));
+      activeReqs = await this.dbService.db
+        .select()
+        .from(requirements)
+        .where(and(eq(requirements.projectId, projectId), ne(requirements.status, 'rejected')));
+    } else {
+      pendingQuestions = Array.from(this.dbService.memQuestions.values()).filter(
+        (q) => q.projectId === projectId && q.status === 'pending',
+      );
+      activeReqs = Array.from(this.dbService.memRequirements.values()).filter(
+        (r) => r.projectId === projectId && r.status !== 'rejected',
+      );
+    }
+
+    if (pendingQuestions.length > 0) {
+      throw new ConflictException(
+        `Cannot lock baseline: ${pendingQuestions.length} clarification question(s) are still pending. Answer or skip them first.`,
+      );
+    }
+
+    const unconfirmedInferred = activeReqs.filter(
+      (r) => r.origin === 'inferred' && r.status !== 'approved' && r.status !== 'baseline',
+    );
+    if (unconfirmedInferred.length > 0) {
+      const codes = unconfirmedInferred.map((r) => r.code).join(', ');
+      throw new ConflictException(
+        `Cannot lock baseline: inferred requirement(s) [${codes}] must be explicitly confirmed before baseline lock (FR-REQ-008).`,
+      );
+    }
+
+    const now = new Date();
+    if (this.dbService.isConnected && this.dbService.db) {
+      if (activeReqs.length > 0) {
+        await this.dbService.db
+          .update(requirements)
+          .set({ status: 'baseline', updatedAt: now })
+          .where(and(eq(requirements.projectId, projectId), ne(requirements.status, 'rejected')));
+      }
+      await this.dbService.db
+        .update(projects)
+        .set({
+          constraints: {
+            ...(project.constraints || {}),
+            baseline_locked: true,
+            baseline_locked_at: now.toISOString(),
+          },
+          updatedAt: now,
+        })
+        .where(eq(projects.id, projectId));
+    } else {
+      for (const r of activeReqs) {
+        r.status = 'baseline';
+        r.updatedAt = now;
+      }
+      const memProj = this.dbService.memProjects.get(projectId);
+      if (memProj) {
+        memProj.constraints = {
+          ...(memProj.constraints || {}),
+          baseline_locked: true,
+          baseline_locked_at: now.toISOString(),
+        };
+        memProj.updatedAt = now;
+      }
+    }
+
+    return {
+      project_id: projectId,
+      status: 'baseline_locked',
+      locked_requirements: activeReqs.length,
+      locked_at: now.toISOString(),
+      coverage,
     };
   }
 
@@ -357,6 +511,7 @@ export class ProjectsService implements OnModuleInit {
     options: { mode?: 'eco' | 'standard' | 'thorough'; from_stage?: number },
     userId: string = '00000000-0000-0000-0000-000000000001',
   ) {
+    await this.findOne(projectId);
     const runId = crypto.randomUUID();
     const mode = options.mode || 'standard';
     const fromStage = options.from_stage || 1;
@@ -364,7 +519,6 @@ export class ProjectsService implements OnModuleInit {
     // Estimate token quota: eco=0, standard=5000, thorough=15000
     const estimatedTokens = mode === 'eco' ? 0 : mode === 'thorough' ? 15000 : 5000;
 
-    // Reserve token budget
     if (estimatedTokens > 0) {
       await this.usageService.reserve(userId, estimatedTokens, runId);
     }
@@ -383,16 +537,11 @@ export class ProjectsService implements OnModuleInit {
     };
 
     if (this.dbService.isConnected && this.dbService.db) {
-      try {
-        await this.dbService.db.insert(runs).values(runRecord);
-      } catch {
-        this.dbService.memRuns.set(runId, runRecord);
-      }
+      await this.dbService.db.insert(runs).values(runRecord);
     } else {
       this.dbService.memRuns.set(runId, runRecord);
     }
 
-    // Push to QueuePort
     await this.queue.enqueue({
       type: 'pipeline',
       projectId,
@@ -401,7 +550,6 @@ export class ProjectsService implements OnModuleInit {
       fromStage,
     });
 
-    // Notify SSE subscribers
     this.sseService.emit(runId, 'status', { status: 'queued', progress: 0, mode });
 
     this.logger.log(`Created Run ${runId} for project=${projectId} (mode=${mode}, fromStage=${fromStage})`);
@@ -421,16 +569,14 @@ export class ProjectsService implements OnModuleInit {
   async getRun(runId: string) {
     let run: any;
     if (this.dbService.isConnected && this.dbService.db) {
-      try {
-        const found = await this.dbService.db.select().from(runs).where(eq(runs.id, runId)).limit(1);
-        if (found.length > 0) run = found[0];
-      } catch {}
+      const found = await this.dbService.db.select().from(runs).where(eq(runs.id, runId)).limit(1);
+      if (found.length > 0) run = found[0];
+    } else {
+      run = this.dbService.memRuns.get(runId);
     }
-    if (!run) run = this.dbService.memRuns.get(runId);
 
     if (!run) throw new NotFoundException(`Run '${runId}' not found`);
 
-    // Check live queue status if queued
     const qStatus = await this.queue.getJobStatus(runId);
     return {
       ...run,
@@ -444,11 +590,8 @@ export class ProjectsService implements OnModuleInit {
   async getRunDecisions(runId: string) {
     let logs: any[] = [];
     if (this.dbService.isConnected && this.dbService.db) {
-      try {
-        logs = await this.dbService.db.select().from(decisionLog).where(eq(decisionLog.runId, runId));
-      } catch {}
-    }
-    if (logs.length === 0) {
+      logs = await this.dbService.db.select().from(decisionLog).where(eq(decisionLog.runId, runId));
+    } else {
       logs = this.dbService.memDecisionLogs.filter((l) => l.runId === runId);
     }
 
@@ -489,10 +632,9 @@ export class ProjectsService implements OnModuleInit {
     const usage = await this.usageService.getCurrentUsage(userId);
 
     if (usage.remainingTokens < 2000) {
-      throw new NotFoundException('Insufficient token quota to escalate LLM items');
+      throw new ForbiddenException('Insufficient token quota to escalate LLM items');
     }
 
-    // Enqueue single stage LLM escalation
     await this.queue.enqueue({
       type: 'pipeline',
       projectId: run.projectId,
@@ -506,116 +648,36 @@ export class ProjectsService implements OnModuleInit {
   }
 
   /**
+   * POST /runs/:id/cancel — Cancel a running/queued pipeline run (FR-RVW-007).
+   */
+  async cancelRun(runId: string) {
+    const run = await this.getRun(runId);
+    if (run.status === 'succeeded' || run.status === 'failed' || run.status === 'cancelled') {
+      return { run_id: runId, status: run.status };
+    }
+
+    const now = new Date();
+    if (this.dbService.isConnected && this.dbService.db) {
+      await this.dbService.db
+        .update(runs)
+        .set({ status: 'cancelled', updatedAt: now })
+        .where(eq(runs.id, runId));
+    } else {
+      const memRun = this.dbService.memRuns.get(runId);
+      if (memRun) {
+        memRun.status = 'cancelled';
+        memRun.updatedAt = now;
+      }
+    }
+
+    this.sseService.emit(runId, 'status', { status: 'cancelled', message: 'Run cancelled by user' });
+    return { run_id: runId, status: 'cancelled' };
+  }
+
+  /**
    * SSE Stream for Run events.
    */
   getRunEventStream(runId: string) {
     return this.sseService.getEventStream(runId);
-  }
-
-  private loadPlatformChecklist(platforms: string[]): PlatformChecklistItem[] {
-    try {
-      const yamlChecklist = loadCombinedChecklist(platforms);
-      if (yamlChecklist && yamlChecklist.length > 0) {
-        return yamlChecklist.map((item) => ({
-          ...item,
-          status: 'missing' as const,
-        }));
-      }
-    } catch (err: any) {
-      this.logger.debug(`Could not load YAML platform checklist: ${err.message}. Using built-in.`);
-    }
-
-    // Fallback built-in checklist based on Tables in doc lines 1183-1237
-    const defaultChecklists: PlatformChecklistItem[] = [
-      // Shared
-      {
-        id: 'shared-backup',
-        platform: 'shared',
-        topic: { vi: 'Sao lưu và phục hồi', en: 'Backup and recovery' },
-        keywords: { vi: ['sao lưu', 'backup', 'phục hồi', 'restore', 'rpo', 'rto'], en: ['backup', 'restore', 'rpo', 'rto'] },
-        quality: 'reliability',
-        level: 'recommended',
-        question: { vi: 'Dữ liệu được sao lưu bao lâu một lần và phục hồi trong bao lâu?', en: 'How often is data backed up and in what timeframe must it be restored?' },
-        status: 'missing',
-      },
-      {
-        id: 'shared-audit',
-        platform: 'shared',
-        topic: { vi: 'Nhật ký kiểm toán', en: 'Audit logs' },
-        keywords: { vi: ['nhật ký', 'audit log', 'truy vết'], en: ['audit', 'audit log', 'traceability'] },
-        quality: 'security',
-        level: 'recommended',
-        question: { vi: 'Những thao tác nào phải được ghi lại, lưu trong bao lâu?', en: 'Which operations must be audited and stored for how long?' },
-        status: 'missing',
-      },
-      {
-        id: 'shared-privacy',
-        platform: 'shared',
-        topic: { vi: 'Dữ liệu cá nhân và bảo mật', en: 'Personal data and privacy' },
-        keywords: { vi: ['dữ liệu cá nhân', 'quyền riêng tư', 'xoá dữ liệu', 'bảo mật'], en: ['privacy', 'gdpr', 'personal data'] },
-        quality: 'security',
-        level: 'required',
-        question: { vi: 'Hệ thống lưu dữ liệu cá nhân nào và xoá khi nào?', en: 'What personal data is retained and when is it purged?' },
-        status: 'missing',
-      },
-      // Web
-      {
-        id: 'web-perf',
-        platform: 'web',
-        topic: { vi: 'Thời gian tải và phản hồi', en: 'Page load and response time' },
-        keywords: { vi: ['tải trang', 'thời gian phản hồi', 'lcp', 'ms', 'giây'], en: ['page load', 'latency', 'response time', 'lcp'] },
-        quality: 'performance',
-        level: 'required',
-        question: { vi: 'Thời gian tải trang tối đa là bao nhiêu?', en: 'What is the maximum allowable page load time?' },
-        status: 'missing',
-      },
-      {
-        id: 'web-auth',
-        platform: 'web',
-        topic: { vi: 'Đăng nhập và phiên', en: 'Authentication & Session' },
-        keywords: { vi: ['đăng nhập', 'phiên', 'oauth', 'jwt', 'xác thực'], en: ['auth', 'login', 'oauth', 'jwt', 'session'] },
-        quality: 'security',
-        level: 'required',
-        question: { vi: 'Hệ thống xác thực người dùng bằng cách nào?', en: 'How does authentication work?' },
-        status: 'missing',
-      },
-      // Mobile
-      {
-        id: 'mob-offline',
-        platform: 'mobile',
-        topic: { vi: 'Ngoại tuyến và đồng bộ', en: 'Offline mode & Sync' },
-        keywords: { vi: ['ngoại tuyến', 'offline', 'đồng bộ', 'sync'], en: ['offline', 'sync', 'local cache'] },
-        quality: 'reliability',
-        level: 'required',
-        question: { vi: 'Chức năng nào dùng được ngoại tuyến và đồng bộ thế nào?', en: 'Which functions operate offline and how is data synced?' },
-        status: 'missing',
-      },
-      // IoT
-      {
-        id: 'iot-protocol',
-        platform: 'iot',
-        topic: { vi: 'Giao thức giao tiếp thiết bị', en: 'Device communication protocol' },
-        keywords: { vi: ['mqtt', 'coap', 'ble', 'lora', 'giao thức'], en: ['mqtt', 'coap', 'ble', 'lora', 'protocol'] },
-        quality: 'compatibility',
-        level: 'required',
-        question: { vi: 'Thiết bị giao tiếp qua giao thức nào?', en: 'Which protocol do devices use?' },
-        status: 'missing',
-      },
-      {
-        id: 'iot-ota',
-        platform: 'iot',
-        topic: { vi: 'Cập nhật firmware từ xa (OTA)', en: 'Firmware Over-The-Air (OTA)' },
-        keywords: { vi: ['cập nhật firmware', 'nâng cấp firmware', 'ota'], en: ['firmware', 'ota', 'over-the-air'] },
-        quality: 'maintainability',
-        level: 'recommended',
-        question: { vi: 'Thiết bị cập nhật firmware bằng cách nào?', en: 'How is firmware updated remotely?' },
-        status: 'missing',
-      },
-    ];
-
-    // Filter by platforms selected for project
-    return defaultChecklists.filter(
-      (item) => item.platform === 'shared' || platforms.includes(item.platform),
-    );
   }
 }

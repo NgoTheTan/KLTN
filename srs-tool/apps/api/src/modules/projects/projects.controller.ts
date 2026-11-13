@@ -7,7 +7,6 @@ import {
   Param,
   Body,
   Req,
-  Res,
   UseGuards,
   Sse,
 } from '@nestjs/common';
@@ -44,24 +43,24 @@ export class ProjectsController {
    * GET /projects/:id — Get project details and coverage summary.
    */
   @Get('projects/:id')
-  findOne(@Param('id') id: string) {
-    return this.projectsService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: any) {
+    return this.projectsService.findOne(id, req.user?.id);
   }
 
   /**
    * PATCH /projects/:id — Update project settings.
    */
   @Patch('projects/:id')
-  update(@Param('id') id: string, @Body() body: Partial<CreateProjectDto>) {
-    return this.projectsService.update(id, body);
+  update(@Param('id') id: string, @Body() body: Partial<CreateProjectDto>, @Req() req: any) {
+    return this.projectsService.update(id, body, req.user?.id);
   }
 
   /**
    * DELETE /projects/:id — Delete project.
    */
   @Delete('projects/:id')
-  delete(@Param('id') id: string) {
-    return this.projectsService.delete(id);
+  delete(@Param('id') id: string, @Req() req: any) {
+    return this.projectsService.delete(id, req.user?.id);
   }
 
   /**
@@ -90,6 +89,14 @@ export class ProjectsController {
     @Body() body: { not_applicable: boolean; reason?: string },
   ) {
     return this.projectsService.updateChecklistItem(id, itemId, body);
+  }
+
+  /**
+   * POST /projects/:id/lock-baseline — Lock requirement baseline after 100% coverage & confirmation gate.
+   */
+  @Post('projects/:id/lock-baseline')
+  lockBaseline(@Param('id') id: string, @Req() req: any) {
+    return this.projectsService.lockBaseline(id, req.user?.id);
   }
 
   /**
@@ -137,5 +144,13 @@ export class ProjectsController {
   escalateRun(@Param('id') id: string, @Req() req: any) {
     const userId = req.user?.id || '00000000-0000-0000-0000-000000000001';
     return this.projectsService.escalateRun(id, userId);
+  }
+
+  /**
+   * POST /runs/:id/cancel — Cancel a running or queued pipeline job (FR-RVW-007).
+   */
+  @Post('runs/:id/cancel')
+  cancelRun(@Param('id') id: string) {
+    return this.projectsService.cancelRun(id);
   }
 }
