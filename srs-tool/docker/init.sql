@@ -1,5 +1,5 @@
--- PostgreSQL init script for srs-tool
--- Runs once when the postgres container starts for the first time
+-- Migration: 0000_initial_schema.sql
+-- Initializes PostgreSQL extensions, 19 entities, indexes, schema upgrades, and Row Level Security (RLS)
 
 -- 1. Extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -43,10 +43,10 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 CREATE INDEX IF NOT EXISTS documents_project_idx ON documents(project_id);
 
--- 5. Segments
+-- 5. Segments (document_id is nullable for S5 clarification answer segments)
 CREATE TABLE IF NOT EXISTS segments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     ordinal INTEGER NOT NULL,
     text TEXT NOT NULL,
@@ -132,6 +132,8 @@ CREATE TABLE IF NOT EXISTS questions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     issue_id UUID REFERENCES issues(id) ON DELETE CASCADE,
+    topic_group TEXT,
+    rule_id TEXT,
     text TEXT NOT NULL,
     options JSONB DEFAULT '[]'::jsonb,
     proposed_value TEXT,
@@ -244,14 +246,13 @@ CREATE INDEX IF NOT EXISTS agent_sessions_project_idx ON agent_sessions(project_
 -- 19. Agent Patches
 CREATE TABLE IF NOT EXISTS agent_patches (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sessionId UUID NOT NULL REFERENCES agent_sessions(id) ON DELETE CASCADE,
+    session_id UUID NOT NULL REFERENCES agent_sessions(id) ON DELETE CASCADE,
     model_id UUID NOT NULL REFERENCES arch_models(id) ON DELETE CASCADE,
     patch JSONB NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
     reason TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS agent_patches_session_idx ON agent_patches(sessionId);
 CREATE INDEX IF NOT EXISTS agent_patches_model_idx ON agent_patches(model_id);
 
 -- 20. Decision Log
@@ -269,7 +270,24 @@ CREATE TABLE IF NOT EXISTS decision_log (
 );
 CREATE INDEX IF NOT EXISTS decision_log_run_idx ON decision_log(run_id);
 
--- 21. Row Level Security (RLS) Configuration
+-- 21. Idempotent Schema Upgrades for Existing Database Volumes
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'agent_patches' AND column_name = 'sessionid'
+    ) THEN
+        ALTER TABLE agent_patches RENAME COLUMN sessionid TO session_id;
+    END IF;
+
+    ALTER TABLE segments ALTER COLUMN document_id DROP NOT NULL;
+    ALTER TABLE questions ADD COLUMN IF NOT EXISTS topic_group TEXT;
+    ALTER TABLE questions ADD COLUMN IF NOT EXISTS rule_id TEXT;
+END $$;
+
+CREATE INDEX IF NOT EXISTS agent_patches_session_idx ON agent_patches(session_id);
+
+-- 22. Row Level Security (RLS) Configuration on all 18 tenant/project-scoped tables
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE segments ENABLE ROW LEVEL SECURITY;
@@ -289,77 +307,174 @@ ALTER TABLE agent_patches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE decision_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usage_ledger ENABLE ROW LEVEL SECURITY;
 
+-- Tenant Isolation Policies for ALL 18 RLS-enabled tables
 DO $$
 BEGIN
+    -- 1. Projects
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'project_isolation_policy' AND tablename = 'projects') THEN
-        CREATE POLICY project_isolation_policy ON projects
-            FOR ALL
-            USING (
-                NULLIF(current_setting('app.current_project_id', true), '') IS NULL
-                OR id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
-            );
+        CREATE POLICY project_isolation_policy ON projects FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+        );
     END IF;
 
+    -- 2. Documents
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'documents_isolation_policy' AND tablename = 'documents') THEN
-        CREATE POLICY documents_isolation_policy ON documents
-            FOR ALL
-            USING (
-                NULLIF(current_setting('app.current_project_id', true), '') IS NULL
-                OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
-            );
+        CREATE POLICY documents_isolation_policy ON documents FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+        );
     END IF;
 
+    -- 3. Segments
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'segments_isolation_policy' AND tablename = 'segments') THEN
-        CREATE POLICY segments_isolation_policy ON segments
-            FOR ALL
-            USING (
-                NULLIF(current_setting('app.current_project_id', true), '') IS NULL
-                OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
-            );
+        CREATE POLICY segments_isolation_policy ON segments FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+        );
     END IF;
 
+    -- 4. Requirements
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'requirements_isolation_policy' AND tablename = 'requirements') THEN
-        CREATE POLICY requirements_isolation_policy ON requirements
-            FOR ALL
-            USING (
-                NULLIF(current_setting('app.current_project_id', true), '') IS NULL
-                OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
-            );
+        CREATE POLICY requirements_isolation_policy ON requirements FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+        );
     END IF;
 
+    -- 5. Requirement Versions
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'requirement_versions_isolation_policy' AND tablename = 'requirement_versions') THEN
+        CREATE POLICY requirement_versions_isolation_policy ON requirement_versions FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR EXISTS (
+                SELECT 1 FROM requirements r
+                WHERE r.id = requirement_versions.requirement_id
+                  AND r.project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+            )
+        );
+    END IF;
+
+    -- 6. Requirement Sources
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'requirement_sources_isolation_policy' AND tablename = 'requirement_sources') THEN
+        CREATE POLICY requirement_sources_isolation_policy ON requirement_sources FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR EXISTS (
+                SELECT 1 FROM segments s
+                WHERE s.id = requirement_sources.segment_id
+                  AND s.project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+            )
+        );
+    END IF;
+
+    -- 7. Issues
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'issues_isolation_policy' AND tablename = 'issues') THEN
-        CREATE POLICY issues_isolation_policy ON issues
-            FOR ALL
-            USING (
-                NULLIF(current_setting('app.current_project_id', true), '') IS NULL
-                OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
-            );
+        CREATE POLICY issues_isolation_policy ON issues FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+        );
     END IF;
 
+    -- 8. Questions
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'questions_isolation_policy' AND tablename = 'questions') THEN
-        CREATE POLICY questions_isolation_policy ON questions
-            FOR ALL
-            USING (
-                NULLIF(current_setting('app.current_project_id', true), '') IS NULL
-                OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
-            );
+        CREATE POLICY questions_isolation_policy ON questions FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+        );
     END IF;
 
+    -- 9. Glossary Terms
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'glossary_terms_isolation_policy' AND tablename = 'glossary_terms') THEN
+        CREATE POLICY glossary_terms_isolation_policy ON glossary_terms FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+        );
+    END IF;
+
+    -- 10. Arch Models
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'arch_models_isolation_policy' AND tablename = 'arch_models') THEN
-        CREATE POLICY arch_models_isolation_policy ON arch_models
-            FOR ALL
-            USING (
-                NULLIF(current_setting('app.current_project_id', true), '') IS NULL
-                OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
-            );
+        CREATE POLICY arch_models_isolation_policy ON arch_models FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+        );
     END IF;
 
+    -- 11. Diagrams
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'diagrams_isolation_policy' AND tablename = 'diagrams') THEN
+        CREATE POLICY diagrams_isolation_policy ON diagrams FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR EXISTS (
+                SELECT 1 FROM arch_models m
+                WHERE m.id = diagrams.model_id
+                  AND m.project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+            )
+        );
+    END IF;
+
+    -- 12. Tech Recommendations
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'tech_recommendations_isolation_policy' AND tablename = 'tech_recommendations') THEN
+        CREATE POLICY tech_recommendations_isolation_policy ON tech_recommendations FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR EXISTS (
+                SELECT 1 FROM arch_models m
+                WHERE m.id = tech_recommendations.model_id
+                  AND m.project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+            )
+        );
+    END IF;
+
+    -- 13. Runs
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'runs_isolation_policy' AND tablename = 'runs') THEN
-        CREATE POLICY runs_isolation_policy ON runs
-            FOR ALL
-            USING (
-                NULLIF(current_setting('app.current_project_id', true), '') IS NULL
-                OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
-            );
+        CREATE POLICY runs_isolation_policy ON runs FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+        );
+    END IF;
+
+    -- 14. Exports
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'exports_isolation_policy' AND tablename = 'exports') THEN
+        CREATE POLICY exports_isolation_policy ON exports FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+        );
+    END IF;
+
+    -- 15. Agent Sessions
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'agent_sessions_isolation_policy' AND tablename = 'agent_sessions') THEN
+        CREATE POLICY agent_sessions_isolation_policy ON agent_sessions FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+        );
+    END IF;
+
+    -- 16. Agent Patches
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'agent_patches_isolation_policy' AND tablename = 'agent_patches') THEN
+        CREATE POLICY agent_patches_isolation_policy ON agent_patches FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR EXISTS (
+                SELECT 1 FROM arch_models m
+                WHERE m.id = agent_patches.model_id
+                  AND m.project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+            )
+        );
+    END IF;
+
+    -- 17. Decision Log
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'decision_log_isolation_policy' AND tablename = 'decision_log') THEN
+        CREATE POLICY decision_log_isolation_policy ON decision_log FOR ALL USING (
+            NULLIF(current_setting('app.current_project_id', true), '') IS NULL
+            OR EXISTS (
+                SELECT 1 FROM runs r
+                WHERE r.id = decision_log.run_id
+                  AND r.project_id = NULLIF(current_setting('app.current_project_id', true), '')::UUID
+            )
+        );
+    END IF;
+
+    -- 18. Usage Ledger
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'usage_ledger_isolation_policy' AND tablename = 'usage_ledger') THEN
+        CREATE POLICY usage_ledger_isolation_policy ON usage_ledger FOR ALL USING (
+            NULLIF(current_setting('app.current_user_id', true), '') IS NULL
+            OR user_id = NULLIF(current_setting('app.current_user_id', true), '')::UUID
+        );
     END IF;
 END $$;

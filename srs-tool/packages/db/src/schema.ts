@@ -66,9 +66,7 @@ export const segments = pgTable(
   'segments',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    documentId: uuid('document_id')
-      .references(() => documents.id, { onDelete: 'cascade' })
-      .notNull(),
+    documentId: uuid('document_id').references(() => documents.id, { onDelete: 'cascade' }),
     projectId: uuid('project_id')
       .references(() => projects.id, { onDelete: 'cascade' })
       .notNull(),
@@ -187,6 +185,8 @@ export const questions = pgTable(
       .references(() => projects.id, { onDelete: 'cascade' })
       .notNull(),
     issueId: uuid('issue_id').references(() => issues.id, { onDelete: 'cascade' }),
+    topicGroup: text('topic_group'),
+    ruleId: text('rule_id'),
     text: text('text').notNull(),
     options: jsonb('options').$type<string[]>().default([]),
     proposedValue: text('proposed_value'),

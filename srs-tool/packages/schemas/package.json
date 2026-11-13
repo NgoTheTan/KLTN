@@ -16,6 +16,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.spec.mjs",
     "clean": "rm -rf dist"
   },
   "dependencies": {

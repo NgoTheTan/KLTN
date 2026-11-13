@@ -155,7 +155,7 @@ export type Requirement = z.infer<typeof RequirementSchema>;
 
 export const SegmentSchema = z.object({
   id: z.string().uuid(),
-  document_id: z.string().uuid(),
+  document_id: z.string().uuid().nullable(),
   ordinal: z.number().int(),
   text: z.string(),
   locator: z.record(z.unknown()), // e.g. { page: 3, line: 12 }
@@ -320,3 +320,38 @@ export const UsageSchema = z.object({
   resets_at: z.string().datetime(),
 });
 export type Usage = z.infer<typeof UsageSchema>;
+
+// Runtime Request DTO Schemas
+
+export const CreateProjectDtoSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  platforms: z.array(PlatformSchema).min(1),
+  outputLanguage: LanguageSchema.optional(),
+  output_language: LanguageSchema.optional(),
+  constraints: z.record(z.unknown()).optional(),
+});
+export type CreateProjectInput = z.infer<typeof CreateProjectDtoSchema>;
+
+export const UpdateChecklistDtoSchema = z.object({
+  not_applicable: z.boolean(),
+  reason: z.string().max(1000).optional(),
+});
+export type UpdateChecklistInput = z.infer<typeof UpdateChecklistDtoSchema>;
+
+export const StartRunDtoSchema = z.object({
+  mode: ProcessingModeSchema.optional(),
+  from_stage: z.number().int().min(1).max(8).optional(),
+});
+export type StartRunInput = z.infer<typeof StartRunDtoSchema>;
+
+export const AnswerQuestionDtoSchema = z.object({
+  answer: z.string().optional().default(''),
+  skip: z.boolean().optional(),
+  autoRerun: z.boolean().optional(),
+});
+export type AnswerQuestionInput = z.infer<typeof AnswerQuestionDtoSchema>;
+
+export const CreateExportDtoSchema = z.object({
+  formats: z.array(z.enum(['md', 'csv', 'puml', 'svg', 'png', 'zip'])).min(1).optional(),
+});
+export type CreateExportInput = z.infer<typeof CreateExportDtoSchema>;
