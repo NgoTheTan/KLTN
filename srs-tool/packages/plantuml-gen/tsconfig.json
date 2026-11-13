@@ -8,5 +8,6 @@
       "@srs-tool/schemas": ["../schemas/dist/index.d.ts"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/*.spec.ts"]
 }

@@ -5,4 +5,7 @@ export {
   generateComponentDiagram,
   generateSequenceDiagram,
   generateERDiagram,
+  sanitizeId,
+  validateSafePuml,
+  type SafePumlValidationResult,
 } from './generators.js';
