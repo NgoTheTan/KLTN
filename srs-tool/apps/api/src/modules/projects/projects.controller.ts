@@ -72,6 +72,22 @@ export class ProjectsController {
   }
 
   /**
+   * GET /projects/:id/segments — List segments with linked requirements for Coverage Ledger UI.
+   */
+  @Get('projects/:id/segments')
+  getSegments(@Param('id') id: string, @Req() req: any) {
+    return this.projectsService.getSegments(id, req.user?.id);
+  }
+
+  /**
+   * GET /projects/:id/runs — List runs for project.
+   */
+  @Get('projects/:id/runs')
+  listRuns(@Param('id') id: string, @Req() req: any) {
+    return this.projectsService.listRuns(id, req.user?.id);
+  }
+
+  /**
    * GET /projects/:id/checklist — Platform checklist status.
    */
   @Get('projects/:id/checklist')

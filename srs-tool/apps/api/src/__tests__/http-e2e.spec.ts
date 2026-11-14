@@ -166,5 +166,30 @@ describe('Full Fastify HTTP E2E Smoke Suite (/api/v1)', () => {
     expect(Object.keys(unzipped)).toContain('SRS-Specification.md');
     expect(Object.keys(unzipped)).toContain('Requirements-Traceability.csv');
     expect(strFromU8(unzipped['SRS-Specification.md']!)).toContain('Hệ thống Nhà kính Thông minh KLTN');
+
+    // 8. Verify Phase 2 support endpoints: GET /projects/:id/segments, /runs, and ?origin= filter
+    const segRes = await app.inject({
+      method: 'GET',
+      url: `/api/v1/projects/${proj.id}/segments`,
+      headers,
+    });
+    expect(segRes.statusCode).toBe(200);
+    expect(Array.isArray(segRes.json())).toBe(true);
+
+    const runsRes = await app.inject({
+      method: 'GET',
+      url: `/api/v1/projects/${proj.id}/runs`,
+      headers,
+    });
+    expect(runsRes.statusCode).toBe(200);
+    expect(Array.isArray(runsRes.json())).toBe(true);
+
+    const originRes = await app.inject({
+      method: 'GET',
+      url: `/api/v1/projects/${proj.id}/requirements?origin=explicit`,
+      headers,
+    });
+    expect(originRes.statusCode).toBe(200);
+    expect(Array.isArray(originRes.json())).toBe(true);
   });
 });

@@ -11,6 +11,7 @@ import {
 import { DatabaseService } from '../../db/database.service';
 import {
   projects,
+  documents,
   segments,
   requirements,
   requirementSources,
@@ -19,7 +20,7 @@ import {
   runs,
   decisionLog,
 } from '../../db/schema';
-import { eq, and, desc, inArray, ne } from 'drizzle-orm';
+import { eq, and, asc, desc, inArray, ne } from 'drizzle-orm';
 import { QueuePort } from '../../ports';
 import { UsageService } from '../usage/usage.service';
 import { SseService } from './sse.service';
@@ -250,6 +251,88 @@ export class ProjectsService implements OnModuleInit {
       unmapped,
       coverage_pct,
     };
+  }
+
+  /**
+   * GET /projects/:id/segments — List segments with linked requirements for Coverage Ledger inspection.
+   */
+  async getSegments(projectId: string, requesterId?: string) {
+    await this.findOne(projectId, requesterId);
+    let segList: any[] = [];
+    let docList: any[] = [];
+    let reqList: any[] = [];
+    let links: any[] = [];
+
+    if (this.dbService.isConnected && this.dbService.db) {
+      segList = await this.dbService.db
+        .select()
+        .from(segments)
+        .where(eq(segments.projectId, projectId))
+        .orderBy(asc(segments.ordinal));
+      docList = await this.dbService.db
+        .select()
+        .from(documents)
+        .where(eq(documents.projectId, projectId));
+      reqList = await this.dbService.db
+        .select()
+        .from(requirements)
+        .where(eq(requirements.projectId, projectId));
+      const segIds = segList.map((s) => s.id);
+      if (segIds.length > 0) {
+        links = await this.dbService.db
+          .select()
+          .from(requirementSources)
+          .where(inArray(requirementSources.segmentId, segIds));
+      }
+    } else {
+      segList = Array.from(this.dbService.memSegments.values())
+        .filter((s) => s.projectId === projectId)
+        .sort((a, b) => (a.ordinal ?? 0) - (b.ordinal ?? 0));
+      docList = Array.from(this.dbService.memDocuments.values()).filter((d) => d.projectId === projectId);
+      reqList = Array.from(this.dbService.memRequirements.values()).filter((r) => r.projectId === projectId);
+      for (const reqLinks of this.dbService.memRequirementSources.values()) {
+        links.push(...reqLinks);
+      }
+    }
+
+    const docMap = new Map(docList.map((d) => [d.id, d.filename]));
+    const reqMap = new Map(reqList.map((r) => [r.id, r]));
+    const linksBySeg = new Map<string, any[]>();
+    for (const l of links) {
+      const req = reqMap.get(l.requirementId);
+      if (!req) continue;
+      const arr = linksBySeg.get(l.segmentId) || [];
+      arr.push({
+        id: req.id,
+        code: req.code,
+        statement: req.statement,
+        status: req.status,
+      });
+      linksBySeg.set(l.segmentId, arr);
+    }
+
+    return segList.map((s) => ({
+      ...s,
+      document_filename: s.documentId ? docMap.get(s.documentId) ?? null : null,
+      linked_requirements: linksBySeg.get(s.id) ?? [],
+    }));
+  }
+
+  /**
+   * GET /projects/:id/runs — List pipeline runs for a project.
+   */
+  async listRuns(projectId: string, requesterId?: string) {
+    await this.findOne(projectId, requesterId);
+    if (this.dbService.isConnected && this.dbService.db) {
+      return await this.dbService.db
+        .select()
+        .from(runs)
+        .where(eq(runs.projectId, projectId))
+        .orderBy(desc(runs.createdAt));
+    }
+    return Array.from(this.dbService.memRuns.values())
+      .filter((r) => r.projectId === projectId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   /**

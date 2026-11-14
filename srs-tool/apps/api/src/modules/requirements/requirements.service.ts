@@ -10,7 +10,7 @@ import {
   glossaryTerms,
   runs,
 } from '../../db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import { QueuePort } from '../../ports';
 import * as crypto from 'crypto';
 
@@ -18,6 +18,7 @@ export interface RequirementFilters {
   type?: string;
   platform?: string;
   status?: string;
+  origin?: string;
   ears_pattern?: string;
   is_asr?: boolean;
   min_quality_score?: number;
@@ -75,6 +76,7 @@ export class RequirementsService {
     return list.filter((r) => {
       if (filters.type && r.type !== filters.type) return false;
       if (filters.status && r.status !== filters.status) return false;
+      if (filters.origin && r.origin !== filters.origin) return false;
       if (filters.ears_pattern && r.earsPattern !== filters.ears_pattern) return false;
       if (filters.is_asr !== undefined && r.isAsr !== filters.is_asr) return false;
       if (filters.min_quality_score !== undefined && (r.qualityScore || 0) < filters.min_quality_score) return false;
@@ -598,13 +600,47 @@ export class RequirementsService {
   }
 
   private async getRequirementSources(requirementId: string) {
+    let links: any[] = [];
+    const segMap = new Map<string, any>();
+
     if (this.dbService.isConnected && this.dbService.db) {
-      return await this.dbService.db
+      links = await this.dbService.db
         .select()
         .from(requirementSources)
         .where(eq(requirementSources.requirementId, requirementId));
+      const segIds = links.map((l) => l.segmentId).filter(Boolean);
+      if (segIds.length > 0) {
+        const segRows = await this.dbService.db
+          .select()
+          .from(segments)
+          .where(inArray(segments.id, segIds));
+        for (const s of segRows) segMap.set(s.id, s);
+      }
+    } else {
+      links = this.dbService.memRequirementSources.get(requirementId) || [];
+      for (const l of links) {
+        const seg = this.dbService.memSegments.get(l.segmentId);
+        if (seg) segMap.set(l.segmentId, seg);
+      }
     }
-    return this.dbService.memRequirementSources.get(requirementId) || [];
+
+    return links.map((l) => {
+      const seg = segMap.get(l.segmentId);
+      return {
+        ...l,
+        segment: seg
+          ? {
+              id: seg.id,
+              ordinal: seg.ordinal,
+              text: seg.text,
+              locator: seg.locator,
+              language: seg.language,
+              coverageStatus: seg.coverageStatus,
+              documentId: seg.documentId,
+            }
+          : null,
+      };
+    });
   }
 
   private async getRequirementVersions(requirementId: string) {
